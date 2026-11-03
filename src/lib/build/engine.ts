@@ -17,7 +17,7 @@ import type {
 const AGENT_NAMES = ["UI/UX", "iOS", "Flutter", "React", "Agent"];
 const DESKTOP_AGENT_COUNT = 28;
 const MOBILE_AGENT_COUNT = 14;
-const AMBIENT_AGENT_COUNT = 5;
+const AMBIENT_AGENT_COUNT = 3;
 const FIRST_AGENT_COUNT = 6;
 const AGENTS_PER_SECOND = 5;
 const IDLE_DELAY = 1100;
@@ -512,7 +512,7 @@ export class BuildEngine {
       x: window.scrollX + randomBetween(0.08, 0.92) * this.width,
       y: window.scrollY + randomBetween(0.55, 0.92) * this.height,
     };
-    return [this.travel(agent, target, randomBetween(900, 1600)), { duration: randomBetween(400, 1400) }];
+    return [this.travel(agent, target, randomBetween(1400, 2400)), { duration: randomBetween(1200, 3000) }];
   }
 
   // 커서를 곡선으로 목표 지점까지 이동
