@@ -29,7 +29,7 @@ function hasVisibleShadow(style: CSSStyleDeclaration) {
 }
 
 function hasVisibleFrame(style: CSSStyleDeclaration) {
-  if (!isTransparent(style.backgroundColor)) return true;
+  if (!isTransparent(style.backgroundColor) || style.backgroundImage !== "none") return true;
   if (hasVisibleShadow(style)) return true;
   return (
     parseFloat(style.borderTopWidth) > 0 &&
