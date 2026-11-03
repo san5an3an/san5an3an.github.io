@@ -1,4 +1,4 @@
-// 포트폴리오 화면에 표시할 소개 문구와 프로젝트 목록 지정
+// 포트폴리오 화면에 표시할 소개 문구와 기술 영역 지정
 export const profile = {
   name: "San Kang",
   role: "UI/UX Designer & Developer",
@@ -10,32 +10,6 @@ export const profile = {
   figmaUrl:
     "https://www.figma.com/design/YBcLGvMB0dIIQ6RCiDSIJ2/-PortFolio--SAN-KANG?node-id=0-1",
 };
-
-export const projects = [
-  {
-    name: "WE-ON",
-    platform: "iOS",
-    description:
-      "결식 우려 아동이 아동급식카드로 이용할 수 있는 동네 식당을 찾고, 한 달 식비를 관리할 수 있는 iOS 앱이에요.",
-    stack: ["Swift 6", "SwiftUI", "Cloudflare Workers"],
-    url: "https://github.com/san5an3an/WE-ON",
-  },
-  {
-    name: "minari-design-storybook",
-    platform: "Design System",
-    description:
-      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
-    stack: ["React", "TypeScript", "shadcn/ui"],
-    url: "https://github.com/san5an3an/minari-design-storybook",
-  },
-  {
-    name: "GREEON",
-    platform: "iOS",
-    description: "전기차 충전소를 찾고 충전까지 이어주는 iOS 앱이에요.",
-    stack: ["Swift", "UIKit", "KakaoMapsSDK"],
-    url: "https://github.com/san5an3an/GREEON_swift",
-  },
-];
 
 export const skills = [
   { title: "iOS / SwiftUI", detail: "iOS / SwiftUI 기반 UI 개발", icon: "smartphone" },
