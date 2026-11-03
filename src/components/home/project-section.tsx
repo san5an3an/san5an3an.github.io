@@ -1,4 +1,5 @@
-import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -10,9 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { projects } from "@/lib/profile";
+import { projects } from "@/lib/projects";
 
-// 주요 프로젝트 카드 목록 표시
+// 주요 프로젝트 카드 목록과 상세 화면, 저장소 링크 표시
 export function ProjectSection() {
   return (
     <section id="projects" className="mx-auto w-full max-w-7xl scroll-mt-14 px-5 py-16 sm:px-8 sm:py-24">
@@ -22,27 +23,31 @@ export function ProjectSection() {
       </div>
       <div data-autolayout className="grid gap-4 md:grid-cols-3">
         {projects.map((project) => (
-          <Card key={project.name} className="min-w-0">
+          <Card key={project.slug} className="min-w-0">
             <CardHeader>
               <Badge variant="outline">{project.platform}</Badge>
               <CardTitle className="pt-2 text-lg font-semibold">{project.name}</CardTitle>
-              <CardDescription className="leading-6">{project.description}</CardDescription>
+              <CardDescription className="leading-6">{project.summary}</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto flex flex-wrap gap-1.5">
-              {project.stack.map((item) => (
+              {project.stack.slice(0, 3).map((item) => (
                 <Badge key={item} variant="secondary">
                   {item}
                 </Badge>
               ))}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="gap-1">
+              <Link href={`/projects/${project.slug}/`} className={buttonVariants({ size: "sm" })}>
+                상세 보기
+                <ArrowRight data-icon="inline-end" />
+              </Link>
               <a
-                href={project.url}
+                href={project.repoUrl}
                 target="_blank"
                 rel="noreferrer"
                 className={buttonVariants({ variant: "ghost", size: "sm" })}
               >
-                Repository 보기
+                Repository
                 <ArrowUpRight data-icon="inline-end" />
               </a>
             </CardFooter>

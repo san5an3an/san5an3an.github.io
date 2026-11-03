@@ -1,0 +1,379 @@
+export type ProjectBlock =
+  | { kind: "text"; paragraphs: string[] }
+  | { kind: "bullets"; items: string[] }
+  | { kind: "cards"; items: { title: string; detail: string }[] }
+  | { kind: "table"; caption?: string; columns: string[]; rows: string[][] };
+
+export type ProjectSectionContent = {
+  id: string;
+  title: string;
+  blocks: ProjectBlock[];
+};
+
+export type Project = {
+  slug: string;
+  name: string;
+  platform: string;
+  summary: string;
+  lead: string[];
+  stack: string[];
+  repoUrl: string;
+  facts: { label: string; value: string }[];
+  sections: ProjectSectionContent[];
+};
+
+// 프로젝트 카드와 상세 화면에 표시할 내용 지정
+export const projects: Project[] = [
+  {
+    slug: "we-on",
+    name: "WE-ON",
+    platform: "iOS",
+    summary:
+      "결식 우려 아동이 아동급식카드로 이용할 수 있는 동네 식당을 찾고, 한 달 식비를 관리할 수 있는 iOS 앱이에요.",
+    lead: [
+      "결식 우려 아동이 아동급식카드로 이용할 수 있는 동네 식당을 찾고, 한 달 식비를 관리할 수 있는 iOS 앱이에요.",
+      "2023년에 UIKit 으로 만들었던 드림머니를 SwiftUI 로 다시 만들었고, 원본 서버가 사라져서 백엔드도 새로 만들었어요.",
+    ],
+    stack: ["Swift 6", "SwiftUI", "Cloudflare Workers", "Hono", "Cloudflare D1"],
+    repoUrl: "https://github.com/san5an3an/WE-ON",
+    facts: [
+      { label: "최소 버전", value: "iOS 17.0" },
+      { label: "앱 테스트", value: "단위 32개, UI 1개" },
+      { label: "서버 테스트", value: "24개" },
+      { label: "가게 데이터", value: "약 30만 곳" },
+    ],
+    sections: [
+      {
+        id: "features",
+        title: "주요 기능",
+        blocks: [
+          {
+            kind: "cards",
+            items: [
+              {
+                title: "홈",
+                detail:
+                  "현재 위치 주소, 가장 가까운 식당 바로가기, 이번 달 가계부 요약, 아동급식카드 가맹점과 선한 영향력 가게 바로가기, 내 주변 식당 목록",
+              },
+              {
+                title: "검색",
+                detail: "가게 이름, 동네 이름, 주소로 검색하고 가맹 종류로 걸러 볼 수 있어요",
+              },
+              {
+                title: "가계부",
+                detail:
+                  "월별 사용액과 잔액을 도넛 차트로 보여주고, 날짜별로 묶은 지출 내역을 추가, 수정, 삭제할 수 있어요",
+              },
+              {
+                title: "내 정보",
+                detail:
+                  "이번 달 사용액, 남은 예산, 지출 건수를 보여주고 닉네임 변경, 로그아웃, 계정 탈퇴를 할 수 있어요",
+              },
+            ],
+          },
+          {
+            kind: "text",
+            paragraphs: [
+              "가게 상세 화면에서는 선한 영향력 가게의 혜택과 제공 조건, 위생등급, 카카오맵 위치, 리뷰를 볼 수 있어요.",
+              "리뷰는 별점, 본문, 사진으로 남길 수 있고 내가 쓴 리뷰만 수정하거나 지울 수 있어요.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "improvements",
+        title: "원본 대비 개선 사항",
+        blocks: [
+          {
+            kind: "bullets",
+            items: [
+              "RxSwift, Alamofire, SnapKit 대신 SwiftUI, Observation, async/await 로 옮겼어요.",
+              "화면을 Presentation, Domain, Data 세 계층으로 나누고, 화면 로직은 Repository 인터페이스에만 의존하게 해서 테스트에서 가짜 Repository 로 바꿔 끼울 수 있게 했어요.",
+              "원본은 자동 로그인을 위해 비밀번호를 기기에 그대로 저장했는데, Firebase 가 유지하는 로그인 상태를 쓰도록 바꿔서 비밀번호를 저장하지 않아요.",
+              "앱을 처음 켤 때 알림 권한을 묻지 않고, 가계부 설정에서 지출 알림을 켤 때 물어보도록 했어요.",
+              "회원가입 때 닉네임을 정할 수 있고, 인증 메일을 못 받았을 때 로그인 화면에서 다시 받을 수 있어요.",
+              "앱 아이콘에서 가져온 네 가지 색으로 화면을 다시 디자인했어요. 연한 색 위의 흰 글씨는 읽기 어려워서 짙은 초록 글씨를 쓰고, 다크 모드도 지원해요.",
+              "서버 API 의 경로와 요청, 응답 형식은 원본과 똑같이 유지했어요.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "architecture",
+        title: "아키텍처",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "앱은 Presentation, Domain, Data 세 계층으로 나눴어요.",
+              "화면은 Domain 에 정의한 인터페이스만 알고, 실제로 서버나 기기 기능을 부르는 코드는 Data 계층에만 있어요.",
+              "그래서 서버 형식이 바뀌어도 Data 계층만 고치면 되고, 화면 로직은 가짜 구현으로 바꿔 끼워 테스트할 수 있어요.",
+            ],
+          },
+          {
+            kind: "table",
+            columns: ["계층", "담당 역할", "대표 타입"],
+            rows: [
+              [
+                "Presentation",
+                "화면을 그리고, 사용자 입력을 받아 ViewModel 에 넘겨요. ViewModel 은 화면에 보여줄 상태를 들고 있어요",
+                "`HomeView`, `HomeViewModel`, `SessionStore`",
+              ],
+              [
+                "Domain",
+                "앱이 다루는 데이터와 규칙을 정의해요. SwiftUI 와 UIKit 을 쓰지 않아서 화면과 상관없이 테스트할 수 있어요",
+                "`StoreDetail`, `StoreRepository`, `InputValidationUseCase`",
+              ],
+              [
+                "Data",
+                "Domain 의 인터페이스를 실제로 구현해요. 서버 요청, Firebase 인증, 위치, 알림 권한을 다뤄요",
+                "`RemoteStoreRepository`, `APIClient`, `FirebaseAuthClient`",
+              ],
+            ],
+          },
+        ],
+      },
+      {
+        id: "backend",
+        title: "백엔드 구성",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: ["원본 서버가 없어서 무료로 운영할 수 있는 구조로 새로 만들었어요."],
+          },
+          {
+            kind: "bullets",
+            items: [
+              "Cloudflare Workers 위에서 원본과 같은 형식의 API 19개와 새로 만든 닉네임 변경 API 1개를 제공해요.",
+              "로그인은 Firebase Authentication 을 쓰고, 서버는 요청마다 Firebase ID 토큰의 서명과 발급 프로젝트를 확인해요.",
+              "데이터는 Cloudflare D1 에 저장해요. 주변 가게는 위도와 경도 범위로 먼저 거른 뒤 실제 거리를 계산해서 가까운 순서로 돌려줘요.",
+              "검색은 현재 위치 20km 안에서만 해요. 가게 30만 곳을 매번 다 훑으면 D1 무료 읽기 한도를 금방 넘기 때문이에요.",
+              "다른 사람의 리뷰나 지출은 수정하거나 지울 수 없고, 탈퇴하면 남긴 데이터도 함께 지워요.",
+              "매일 저녁 8시에 지출 알림을 켠 사용자에게 기록 알림을 보내요.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "stack",
+        title: "기술 스택",
+        blocks: [
+          {
+            kind: "table",
+            caption: "iOS",
+            columns: ["기술 스택", "적용 영역", "선정 근거"],
+            rows: [
+              [
+                "SwiftUI",
+                "모든 화면과 공용 Component",
+                "화면 상태가 바뀌면 자동으로 다시 그려져서 UIKit 보다 코드가 훨씬 짧아졌어요",
+              ],
+              [
+                "Observation",
+                "모든 ViewModel 과 `SessionStore`",
+                "`@Observable` 은 실제로 읽은 값이 바뀔 때만 화면을 다시 그려서 ObservableObject 보다 가벼워요. 그래서 최소 버전을 iOS 17 로 정했어요",
+              ],
+              [
+                "Swift Concurrency",
+                "서버 요청, 위치 조회, 권한 요청",
+                "ViewModel 은 `@MainActor` 에서 돌리고, 기다릴 필요 없는 요청은 `async let` 으로 동시에 보내요. 위치는 TaskGroup 으로 5초 제한을 걸었고, FCM 토큰은 actor 에 보관해요",
+              ],
+              [
+                "Swift 6 엄격한 동시성 검사",
+                "프로젝트 전체",
+                "데이터 경합을 컴파일 단계에서 막으려고 켰고, 경고 없이 빌드돼요",
+              ],
+              [
+                "카카오맵 SDK",
+                "가게 위치 미리보기, 큰 지도, 가게 위치 마커",
+                "원본은 네이버 지도를 썼는데, 주소 검색에 쓰던 카카오 개발자 앱 하나로 지도 키까지 관리하려고 바꿨어요. SDK 가 UIKit 뷰만 제공해서 `UIViewRepresentable` 로 연결하고, 지도 엔진은 화면이 사라질 때 멈추게 했어요",
+              ],
+              [
+                "Swift Charts",
+                "가계부 사용액과 잔액 도넛 차트",
+                "기본 프레임워크라 라이브러리를 추가하지 않아도 됐어요",
+              ],
+            ],
+          },
+          {
+            kind: "table",
+            caption: "서버",
+            columns: ["기술 스택", "적용 영역", "선정 근거"],
+            rows: [
+              [
+                "Cloudflare Workers",
+                "API 서버와 매일 저녁 알림 예약",
+                "카드 등록 없이 무료로 쓸 수 있고, 정해진 시간에 실행하는 Cron 도 무료예요",
+              ],
+              [
+                "Hono",
+                "라우트 나누기와 에러 응답 통일",
+                "Workers 에서 가볍게 돌아가고, 라우트를 기능별 파일로 나누기 쉬웠어요",
+              ],
+              [
+                "Cloudflare D1",
+                "회원, 가게, 리뷰, 가계부, 알림 저장",
+                "Workers 와 바로 연결되는 SQLite 라서 SQL 로 조회하고 마이그레이션 파일로 테이블을 관리해요",
+              ],
+            ],
+          },
+        ],
+      },
+      {
+        id: "development",
+        title: "개발 방식",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "설계와 구현에 제가 구축한 AI 하네스를 함께 사용했어요.",
+              "어떤 기술을 쓸지, 화면을 어떻게 구성할지, 서버를 어디에 둘지 같은 결정은 직접 내렸고, 결과물은 테스트와 시뮬레이터로 확인하면서 다듬었어요.",
+              "앱 코드도 직접 작성했어요. 다시 불러올 때 로딩이 보이지 않던 화면들의 상태 조건, 가계부 요약이 불러오기 전에 0원으로 보이던 문제, 카카오맵 연결(`KakaoMapView`, SDK 초기화, 가게 위치 마커)을 직접 고치고 만들었어요.",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "minari-design-storybook",
+    name: "minari-design-storybook",
+    platform: "Design System",
+    summary:
+      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
+    lead: [
+      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여, 구현 방식과 디자인 토큰의 적용 범위를 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
+    ],
+    stack: ["React", "TypeScript", "shadcn/ui", "Next.js", "Playwright"],
+    repoUrl: "https://github.com/san5an3an/minari-design-storybook",
+    facts: [
+      { label: "디자인 시스템", value: "20종" },
+      { label: "컴포넌트 계약", value: "74종" },
+      { label: "UI 라이브러리", value: "18종 이상" },
+    ],
+    sections: [
+      {
+        id: "overview",
+        title: "무엇을 만든 건가",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "`01-cobalt`부터 `20-berry`까지 총 20종의 디자인 시스템을 설계했습니다.",
+              "하나의 디자인 시스템에 테마만 변경하는 방식이 아니라, 각 시스템이 독립적인 컬러 체계, Radius, 간격, 컴포넌트 표현 방식과 시각적 특성을 갖도록 구성했습니다. 시스템 간에 디자인 토큰 값을 공유하지 않으며, 공통으로 적용되는 것은 품질 및 설계 규칙입니다.",
+              "또한 동일한 컴포넌트 계약 74종을 shadcn/ui, MUI, Ant Design, Chakra UI, Mantine, Fluent UI, Carbon, Blueprint, Bootstrap, daisyUI, Flowbite, Grommet, HeroUI, Cloudscape, PrimeReact, Primer, Spectrum, Lightning 등 다양한 UI 라이브러리에 적용했습니다.",
+              "이를 통해 동일한 디자인 토큰과 컴포넌트 규격이 각 UI 라이브러리에서 어떻게 표현되고, 어느 범위까지 적용되는지 직접 비교할 수 있습니다.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "features",
+        title: "주요 화면 및 기능",
+        blocks: [
+          {
+            kind: "cards",
+            items: [
+              {
+                title: "컴포넌트 카탈로그",
+                detail:
+                  "74종의 공통 컴포넌트를 디자인 시스템 × UI 라이브러리 조합으로 렌더링하여 비교합니다. 컴포넌트 속성 정보는 수동으로 작성하지 않고 설치된 패키지의 타입 정의를 기반으로 추출합니다.",
+              },
+              {
+                title: "라이브러리 예제 비교",
+                detail: "각 UI 라이브러리의 컴포넌트 및 예제를 동일한 환경에서 확인하고 비교할 수 있습니다.",
+              },
+              {
+                title: "Usage 대시보드",
+                detail:
+                  "UI 라이브러리별로 서로 다른 성격의 제품 화면을 구성하여 디자인 토큰과 컴포넌트가 실제 화면에서 어떻게 조합되는지 확인합니다.",
+              },
+              {
+                title: "디자인 시스템 내보내기",
+                detail: "선택한 디자인 시스템의 토큰, 테마 및 컴포넌트를 하나의 묶음으로 내보낼 수 있습니다.",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "scope",
+        title: "이 프로젝트에서 설계·구현한 영역",
+        blocks: [
+          {
+            kind: "bullets",
+            items: [
+              "서로 독립된 20종 디자인 시스템의 토큰 체계 및 설계 규칙",
+              "다양한 UI 라이브러리를 하나의 컴포넌트 계약 74종으로 연결하는 추상화 계층",
+              "공통 컴포넌트 계약을 각 UI 라이브러리에 연결하는 어댑터",
+              "디자인 토큰을 라이브러리별 테마 체계로 변환하는 테마 번역 구조",
+              "디자인 시스템 × UI 라이브러리 조합을 탐색할 수 있는 컴포넌트 카탈로그",
+              "설치된 패키지의 타입 정의를 기반으로 컴포넌트 속성 정보를 추출하는 기능",
+              "UI 라이브러리 전환, 검색 및 내비게이션을 포함한 미리보기 환경",
+              "디자인 토큰, 테마 및 컴포넌트를 묶어 내보내는 기능",
+              "HTML에서 컴포넌트 후보를 추출하는 가져오기 기능",
+              "디자인 시스템과 UI 라이브러리의 실제 적용을 확인하기 위한 Usage 제품 화면",
+            ],
+          },
+        ],
+      },
+      {
+        id: "nature",
+        title: "프로젝트 성격",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "본 repository는 포트폴리오 및 기술 시연을 목적으로 구성된 프로젝트입니다.",
+              "각 UI 라이브러리가 제공하는 컴포넌트 자체를 직접 구현한 것이 아니라, 각 라이브러리의 기존 컴포넌트를 공통 계약에 연결하고 디자인 토큰을 적용하기 위한 추상화 계층, 어댑터 및 테마 변환 구조를 설계·구현했습니다.",
+              "본 프로젝트는 명시된 UI 라이브러리 및 제공자와 공식적인 제휴·후원·인증 관계가 없습니다. 라이브러리 및 제품명은 프로젝트에서 사용한 기술과 출처를 명확하게 표시하기 위한 목적으로만 사용합니다.",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "greeon",
+    name: "GREEON",
+    platform: "iOS",
+    summary: "전기차 충전소를 찾고 충전까지 이어주는 iOS 앱이에요.",
+    lead: ["전기차 충전소를 찾고 충전까지 이어주는 iOS 앱이에요."],
+    stack: ["Swift", "UIKit", "KakaoMapsSDK"],
+    repoUrl: "https://github.com/san5an3an/GREEON_swift",
+    facts: [
+      { label: "UI", value: "UIKit" },
+      { label: "지도", value: "KakaoMapsSDK" },
+      { label: "개발 기간", value: "2024.02 ~ 2026.07" },
+    ],
+    sections: [
+      {
+        id: "screens",
+        title: "화면 구성",
+        blocks: [
+          {
+            kind: "cards",
+            items: [
+              {
+                title: "홈",
+                detail: "바로가기, 즐겨찾기 충전기, 충전 패턴, 충전 이력을 한 화면에서 보여줘요.",
+              },
+              {
+                title: "지도",
+                detail: "카카오맵 위에서 현재 위치와 충전소 위치를 확인할 수 있어요.",
+              },
+              {
+                title: "충전",
+                detail: "QR 코드나 충전기 번호로 충전기를 고르고 충전 진행 상태를 확인할 수 있어요.",
+              },
+              {
+                title: "고객 지원",
+                detail: "공지사항과 FAQ, 1:1 문의, 고장 신고, 불편 민원 신고 화면을 제공해요.",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
