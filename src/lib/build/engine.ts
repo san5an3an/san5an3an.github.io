@@ -130,8 +130,18 @@ export class BuildEngine {
     this.runLoop();
   }
 
+  // 재생 없이 완성된 화면 상태를 알려 다시 보기 버튼만 표시
+  showFinished() {
+    this.finished = true;
+    this.emitStatus();
+  }
+
   // 처음 상태로 되돌려 다시 재생
   restart() {
+    if (!this.started) {
+      this.start();
+      return;
+    }
     this.resetElements();
     this.prepare();
     this.runLoop();
