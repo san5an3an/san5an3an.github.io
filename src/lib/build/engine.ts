@@ -85,7 +85,7 @@ export class BuildEngine {
   private agents: Agent[] = [];
   private flashes: Flash[] = [];
   private animations = new Set<Animation>();
-  private styledElements = new Set<HTMLElement | SVGElement>();
+  private savedInlineStyles = new Map<HTMLElement | SVGElement, { clipPath: string; borderRadius: string }>();
   private tokens: BuildTokens = {
     brand: "",
     onBrand: "",
@@ -226,8 +226,7 @@ export class BuildEngine {
   private resetElements() {
     for (const animation of this.animations) animation.cancel();
     this.animations.clear();
-    for (const el of this.styledElements) this.clearInlineStyle(el);
-    this.styledElements.clear();
+    for (const el of Array.from(this.savedInlineStyles.keys())) this.restoreInlineStyle(el);
     for (const layer of this.layers) {
       layer.el.removeAttribute("data-build-hidden");
       layer.state = "revealed";
@@ -247,10 +246,21 @@ export class BuildEngine {
     this.clearCanvas();
   }
 
-  private clearInlineStyle(el: HTMLElement | SVGElement) {
-    el.style.clipPath = "";
-    el.style.borderRadius = "";
-    this.styledElements.delete(el);
+  // 효과용 스타일을 적용하기 전에 요소에 직접 지정된 값 저장
+  private overrideInlineStyle(el: HTMLElement | SVGElement, styles: { clipPath?: string; borderRadius?: string }) {
+    if (!this.savedInlineStyles.has(el)) {
+      this.savedInlineStyles.set(el, { clipPath: el.style.clipPath, borderRadius: el.style.borderRadius });
+    }
+    Object.assign(el.style, styles);
+  }
+
+  // 효과가 끝난 요소를 저장해 둔 원래 스타일로 복원
+  private restoreInlineStyle(el: HTMLElement | SVGElement) {
+    const saved = this.savedInlineStyles.get(el);
+    if (!saved) return;
+    el.style.clipPath = saved.clipPath;
+    el.style.borderRadius = saved.borderRadius;
+    this.savedInlineStyles.delete(el);
   }
 
   private clearCanvas() {
@@ -573,8 +583,7 @@ export class BuildEngine {
       finish: () => {
         agent.draft = null;
         if (roundsCorner && layer.state !== "revealed") {
-          layer.el.style.borderRadius = "0px";
-          this.styledElements.add(layer.el);
+          this.overrideInlineStyle(layer.el, { borderRadius: "0px" });
         }
         this.revealLayer(layer);
       },
@@ -601,7 +610,7 @@ export class BuildEngine {
     return {
       duration: 260,
       finish: () => {
-        this.clearInlineStyle(layer.el);
+        this.restoreInlineStyle(layer.el);
         this.play(
           layer.el,
           [{ borderRadius: "0px" }, { borderRadius: `${layer.radius}px` }],
@@ -676,8 +685,7 @@ export class BuildEngine {
           if (!started) {
             started = true;
             agent.tool = "text";
-            el.style.clipPath = "inset(0 100% 0 0)";
-            this.styledElements.add(el);
+            this.overrideInlineStyle(el, { clipPath: "inset(0 100% 0 0)" });
             this.revealLayer(layer);
           }
           let remaining = (Math.floor(progress * glyphs) / glyphs) * totalWidth;
@@ -697,7 +705,7 @@ export class BuildEngine {
           agent.y = caretY + (line.bottom - line.top) * 0.75;
         },
         finish: () => {
-          this.clearInlineStyle(el);
+          this.restoreInlineStyle(el);
           agent.caret = null;
           agent.tool = "arrow";
         },
