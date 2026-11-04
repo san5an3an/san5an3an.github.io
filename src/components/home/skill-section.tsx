@@ -16,7 +16,7 @@ export function SkillSection() {
   return (
     <section id="skills" className="mx-auto w-full max-w-7xl scroll-mt-14 px-5 py-16 sm:px-8 sm:py-24">
       <div className="mb-8 flex flex-col gap-2 sm:mb-10">
-        <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Skills</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Skills</h2>
         <p className="max-w-3xl leading-7 text-muted-foreground">{profile.interest}</p>
       </div>
       <div data-autolayout className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
