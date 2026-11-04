@@ -34,7 +34,7 @@ export function ProjectDetail({ project, previous, next }: ProjectDetailProps) {
           프로젝트 목록
         </Link>
         <Badge variant="outline">{project.platform}</Badge>
-        <h1 className="text-[2.25rem] leading-[1.1] font-bold tracking-tight sm:text-5xl">
+        <h1 className="text-[2.25rem] leading-[1.1] font-extrabold tracking-tight sm:text-5xl">
           {project.name}
         </h1>
         <div className="flex max-w-3xl flex-col gap-2 text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
@@ -78,7 +78,7 @@ export function ProjectDetail({ project, previous, next }: ProjectDetailProps) {
         <div className="flex min-w-0 flex-col gap-12">
           {project.sections.map((section) => (
             <section key={section.id} id={section.id} className="flex scroll-mt-20 flex-col gap-4">
-              <h2 className="text-2xl font-bold tracking-tight">{section.title}</h2>
+              <h2 className="text-2xl font-extrabold tracking-tight">{section.title}</h2>
               {section.blocks.map((block, index) => (
                 <ProjectBlockView key={index} block={block} />
               ))}

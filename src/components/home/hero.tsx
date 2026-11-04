@@ -14,7 +14,7 @@ export function Hero() {
     >
       <div className="flex min-w-0 flex-col items-start gap-6">
         <Badge variant="secondary">{profile.role}</Badge>
-        <h1 className="text-[2.25rem] leading-[1.1] font-bold tracking-tight sm:text-5xl lg:text-[2.75rem] xl:text-6xl">
+        <h1 className="text-[2.25rem] leading-[1.1] font-extrabold tracking-tight sm:text-5xl lg:text-[2.75rem] xl:text-6xl">
           {profile.headline.map((line, index) => (
             <span
               key={line}

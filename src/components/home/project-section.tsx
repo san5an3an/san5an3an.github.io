@@ -18,7 +18,7 @@ export function ProjectSection() {
   return (
     <section id="projects" className="mx-auto w-full max-w-7xl scroll-mt-14 px-5 py-16 sm:px-8 sm:py-24">
       <div className="mb-8 flex flex-col gap-2 sm:mb-10">
-        <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Projects</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Projects</h2>
         <p className="text-muted-foreground">직접 설계하고 구현한 프로젝트입니다.</p>
       </div>
       <div data-autolayout className="grid gap-4 md:grid-cols-3">
