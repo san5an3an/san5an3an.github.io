@@ -21,7 +21,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Pretendard Variable", var(--base-font-family-sans);
+  --font-sans: var(--font-suite), system-ui, sans-serif;
   --font-mono: var(--base-font-family-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
