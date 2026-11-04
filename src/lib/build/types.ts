@@ -14,6 +14,7 @@ export type Layer = {
   fill: string | null;
   isGroupItem: boolean;
   isSticky: boolean;
+  isFramedText: boolean;
   state: "hidden" | "claimed" | "revealed";
 };
 

@@ -27,6 +27,9 @@ const SWEEP_INTERVAL = 200;
 const MAX_FRAME_TIME = 50;
 const PASSED_MARGIN = 20;
 const VIEW_BOTTOM_RATIO = 0.96;
+const FRAMED_TEXT_MIN_DRAG = 280;
+const FRAMED_TEXT_PLACEHOLDER_HOLD = 110;
+const FRAMED_TEXT_CARET_MOVE = 140;
 const SPRING_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
 
 type EngineOptions = {
@@ -239,6 +242,7 @@ export class BuildEngine {
     for (const el of Array.from(this.savedInlineStyles.keys())) this.restoreInlineStyle(el);
     for (const layer of this.layers) {
       layer.el.removeAttribute("data-build-hidden");
+      layer.el.removeAttribute("data-build-phase");
       layer.state = "revealed";
     }
     for (const group of this.groups) {
@@ -562,9 +566,9 @@ export class BuildEngine {
   }
 
   // 시작점에서 끝점으로 영역을 드래그하는 동작 생성
-  private dragRect(agent: Agent, rect: Rect): Step {
+  private dragRect(agent: Agent, rect: Rect, minDuration = 180): Step {
     return {
-      duration: clamp(Math.sqrt(rect.w * rect.h) * 0.9, 180, 460),
+      duration: clamp(Math.sqrt(rect.w * rect.h) * 0.9, minDuration, 460),
       tick: (progress) => {
         const eased = easeInOut(progress);
         const draft = { x: rect.x, y: rect.y, w: rect.w * eased, h: rect.h * eased };
@@ -685,16 +689,20 @@ export class BuildEngine {
     const widths = lines.map((line) => line.right - line.left);
     const totalWidth = widths.reduce((sum, width) => sum + width, 0) || 1;
     const glyphs = Math.max(length, 1);
+    const caretStart = { x: start.x + lines[0].left, y: start.y + lines[0].top };
     let started = false;
 
     return [
-      this.moveTo(agent, { x: start.x + lines[0].left, y: start.y + lines[0].top }),
+      ...(layer.isFramedText
+        ? this.frameBeforeTypingSteps(agent, layer, caretStart)
+        : [this.moveTo(agent, caretStart)]),
       {
         duration: clamp(length * 24, 240, 1000),
         tick: (progress) => {
           if (!started) {
             started = true;
             agent.tool = "text";
+            el.setAttribute("data-build-phase", "typing");
             this.overrideInlineStyle(el, { clipPath: "inset(0 100% 0 0)" });
             this.revealLayer(layer);
           }
@@ -716,10 +724,30 @@ export class BuildEngine {
         },
         finish: () => {
           this.restoreInlineStyle(el);
+          el.removeAttribute("data-build-phase");
+          agent.draft = null;
           agent.caret = null;
           agent.tool = "arrow";
         },
       },
+    ];
+  }
+
+  // 표 셀의 프레임을 먼저 그리고 윤곽선만 남긴 채 글자 시작 위치로 이동하는 동작 생성
+  private frameBeforeTypingSteps(agent: Agent, layer: Layer, caretStart: Point): Step[] {
+    const { rect } = layer;
+    this.addFlash({ kind: "cross", x: rect.x, y: rect.y, age: 0, ttl: 340 });
+    return [
+      this.moveTo(agent, { x: rect.x, y: rect.y }),
+      { duration: 0, finish: () => layer.el.setAttribute("data-build-phase", "framing") },
+      this.dragRect(agent, rect, FRAMED_TEXT_MIN_DRAG),
+      {
+        duration: FRAMED_TEXT_PLACEHOLDER_HOLD,
+        finish: () => {
+          agent.draft = { rect, filled: false };
+        },
+      },
+      this.travel(agent, caretStart, FRAMED_TEXT_CARET_MOVE),
     ];
   }
 

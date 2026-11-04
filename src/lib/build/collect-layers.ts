@@ -3,6 +3,7 @@ import type { Layer, LayerElement, LayerKind, LayoutGroup, Point, Rect } from ".
 const MEDIA_SELECTOR = "svg, img, video, canvas, picture";
 const SKIP_SELECTOR = "script, style, noscript, [data-build-skip]";
 const INTERACTIVE_SELECTOR = "a, button";
+const FRAMED_TEXT_SELECTOR = "th, td";
 const MIN_LAYER_SIZE = 2;
 const MIN_CHROMA = 40;
 
@@ -105,6 +106,7 @@ export function collectLayers(root: HTMLElement) {
         fill: readChromaticFill(style),
         isGroupItem: isItem,
         isSticky,
+        isFramedText: el.matches(FRAMED_TEXT_SELECTOR),
         state: "hidden",
       };
       layers.push(layer);
