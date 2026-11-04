@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
-import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+import localFont from "next/font/local";
 import "./globals.css";
 import { BUILD_PREPAINT_SCRIPT } from "@/lib/build/prepaint";
 import { profile } from "@/lib/profile";
+
+// SUITE 가변 글꼴 지정. 굵기 300 부터 900 까지 파일 하나로 처리함
+const suite = localFont({
+  src: "../design-system/fonts/SUITE-Variable.woff2",
+  variable: "--font-suite",
+  weight: "300 900",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: `${profile.name} | ${profile.role}`,
@@ -13,7 +21,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ko"
-      className="h-full antialiased"
+      className={`${suite.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
