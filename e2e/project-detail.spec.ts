@@ -106,6 +106,80 @@ test.describe("프로젝트 상세 화면 조립 애니메이션", () => {
     await page.reload();
     await expect(statusBar(page)).toBeVisible();
   });
+
+  test("이미 본 페이지의 주소를 직접 다시 열면 조립을 다시 재생함", async ({ page }) => {
+    await page.goto("/projects/greeon/");
+    await skipButton(page).click();
+    await page.goto("/projects/greeon/");
+    await expect(statusBar(page)).toBeVisible();
+  });
+
+  test("이미 본 상세 화면도 카드의 링크로 다시 들어가면 조립을 재생함", async ({ page }) => {
+    await page.goto("/");
+    await skipButton(page).click();
+    await projectCard(page, "WE-ON").getByRole("link", { name: "상세 보기" }).click();
+    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+    await skipButton(page).click();
+
+    await page.goBack();
+    await expect(replayButton(page)).toBeVisible();
+    await projectCard(page, "WE-ON").getByRole("link", { name: "상세 보기" }).click();
+    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+
+    await expect(statusBar(page)).toBeVisible();
+    await expect(replayButton(page)).toHaveCount(0);
+    await expect(page.locator("article h1")).toHaveAttribute("data-build-hidden");
+  });
+
+  test("이미 본 상세 화면으로 앞으로 가기로 돌아가면 재생하지 않고 다시 보기 버튼만 표시함", async ({ page }) => {
+    await page.goto("/");
+    await skipButton(page).click();
+    await projectCard(page, "WE-ON").getByRole("link", { name: "상세 보기" }).click();
+    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+    await skipButton(page).click();
+
+    await page.goBack();
+    await expect(replayButton(page)).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+
+    await expect(page.locator("article h1")).toBeVisible();
+    await expect(replayButton(page)).toBeVisible();
+    await expect(statusBar(page)).toHaveCount(0);
+    await expect(hiddenElements(page)).toHaveCount(0);
+  });
+
+  test("이미 본 첫 페이지로 프로젝트 목록 링크를 눌러 돌아오면 재생하지 않음", async ({ page }) => {
+    await page.goto("/");
+    await skipButton(page).click();
+    await projectCard(page, "WE-ON").getByRole("link", { name: "상세 보기" }).click();
+    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+    await skipButton(page).click();
+
+    await page.locator("article header").getByRole("link", { name: "프로젝트 목록" }).click();
+    await expect(page).toHaveURL(/\/#projects$/);
+
+    await expect(replayButton(page)).toBeVisible();
+    await expect(statusBar(page)).toHaveCount(0);
+    await expect(hiddenElements(page)).toHaveCount(0);
+  });
+
+  test("같은 페이지에서 해시 이동을 뒤로 간 다음 누른 상세 보기 링크는 조립을 재생함", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await skipButton(page).click();
+    await page.locator("article header").getByRole("link", { name: "프로젝트 목록" }).click();
+    await expect(page).toHaveURL(/\/#projects$/);
+    await skipButton(page).click();
+
+    await page.locator("header nav").getByRole("link", { name: "Skills" }).click();
+    await expect(page).toHaveURL(/#skills$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/#projects$/);
+
+    await projectCard(page, "WE-ON").getByRole("link", { name: "상세 보기" }).click();
+    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+    await expect(statusBar(page)).toBeVisible();
+  });
 });
 
 test.describe("minari 상세 화면 컬러칩", () => {
@@ -150,6 +224,124 @@ test.describe("minari 상세 화면 컬러칩", () => {
       elements.map((element) => (element as HTMLElement).style.borderRadius),
     );
     expect(new Set(radii)).toEqual(new Set(["10px"]));
+  });
+});
+
+test.describe("상세 화면 표 배치", () => {
+  // 표마다 본문 행 높이의 최대와 최소 차이, 머리글과 첫 행의 열 위치 일치 여부 측정
+  function measureTables(page: Page) {
+    return page.locator("article table").evaluateAll((tables) =>
+      tables.map((table) => {
+        const heights = [...table.querySelectorAll("tbody tr")].map((row) => row.getBoundingClientRect().height);
+        const left = (cell: Element) => Math.round(cell.getBoundingClientRect().left);
+        return {
+          rowCount: heights.length,
+          spread: Math.max(...heights) - Math.min(...heights),
+          headLefts: [...table.querySelectorAll("thead th")].map(left),
+          cellLefts: [...table.querySelectorAll("tbody tr:first-child td")].map(left),
+        };
+      }),
+    );
+  }
+
+  async function expectEqualRows(page: Page) {
+    await page.goto("/projects/we-on/");
+    await skipButton(page).click();
+    const tables = await measureTables(page);
+    expect(tables).toHaveLength(3);
+    for (const table of tables) {
+      expect(table.rowCount).toBeGreaterThan(1);
+      expect(table.spread).toBeLessThanOrEqual(0.1);
+      expect(table.cellLefts).toEqual(table.headLefts);
+    }
+  }
+
+  test("데스크톱 폭에서 표마다 본문 행 높이가 모두 같고 머리글과 열 위치가 일치함", async ({ page }) => {
+    await expectEqualRows(page);
+  });
+
+  test("모바일 폭에서 표마다 본문 행 높이가 모두 같고 머리글과 열 위치가 일치함", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectEqualRows(page);
+  });
+
+  test("grid 로 배치해도 표와 머리글, 셀의 접근성 역할을 유지함", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await skipButton(page).click();
+    await expect(page.getByRole("table")).toHaveCount(3);
+    await expect(page.getByRole("columnheader")).toHaveCount(9);
+    await expect(page.getByRole("cell")).toHaveCount(36);
+    await expect(page.getByRole("cell", { name: "Presentation", exact: true })).toBeAttached();
+  });
+});
+
+test.describe("상세 화면 표 조립 순서", () => {
+  // 지정한 요소의 조립 단계 변화와 그 순간의 숨김 여부를 기록하고 요소를 화면으로 이동
+  function recordPhases(page: Page, selector: string) {
+    return page.evaluateHandle((target) => {
+      const element = document.querySelector(target);
+      const history: string[] = [];
+      if (!element) return history;
+      new MutationObserver(() => {
+        const hidden = element.hasAttribute("data-build-hidden") ? "hidden" : "visible";
+        history.push(`${element.getAttribute("data-build-phase")}:${hidden}`);
+      }).observe(element, { attributes: true, attributeFilter: ["data-build-phase"] });
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+      return history;
+    }, selector);
+  }
+
+  test("표 셀은 숨겨진 채 프레임을 먼저 그린 뒤 글자를 입력하고 흔적 없이 끝남", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await expect(statusBar(page)).toBeVisible();
+    const history = await recordPhases(page, "#architecture tbody td");
+
+    await expect
+      .poll(() => history.evaluate((items) => [...items]), { timeout: 15000 })
+      .toEqual(["framing:hidden", "typing:visible", "null:visible"]);
+
+    const cell = page.locator("#architecture tbody td").first();
+    await expect(cell).not.toHaveAttribute("data-build-phase");
+    expect(await cell.evaluate((element) => (element as HTMLElement).style.clipPath)).toBe("");
+  });
+
+  test("표 머리글 셀도 프레임을 먼저 그린 뒤 글자를 입력함", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await expect(statusBar(page)).toBeVisible();
+    const history = await recordPhases(page, "#architecture thead th");
+
+    await expect
+      .poll(() => history.evaluate((items) => [...items]), { timeout: 15000 })
+      .toEqual(["framing:hidden", "typing:visible", "null:visible"]);
+  });
+
+  test("표 바깥 문단은 프레임 없이 바로 글자를 입력함", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await expect(statusBar(page)).toBeVisible();
+    const history = await recordPhases(page, "#architecture p");
+
+    await expect
+      .poll(() => history.evaluate((items) => [...items]), { timeout: 15000 })
+      .toEqual(["typing:visible", "null:visible"]);
+  });
+
+  test("표 셀을 조립하는 도중 건너뛰어도 단계 표시와 자르기 스타일이 남지 않음", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await expect(statusBar(page)).toBeVisible();
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = "auto";
+      document.querySelector("#architecture table")?.scrollIntoView({ block: "center" });
+    });
+    await expect(page.locator("#architecture [data-build-phase]").first()).toBeAttached({ timeout: 15000 });
+    await skipButton(page).click();
+
+    await expect(page.locator("[data-build-phase]")).toHaveCount(0);
+    await expect(hiddenElements(page)).toHaveCount(0);
+    const clipped = await page
+      .locator("#architecture td, #architecture th")
+      .evaluateAll((cells) => cells.filter((cell) => (cell as HTMLElement).style.clipPath).length);
+    expect(clipped).toBe(0);
   });
 });
 
