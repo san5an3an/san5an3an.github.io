@@ -61,28 +61,35 @@ function CardsBlock({ items }: { items: { title: string; detail: string }[] }) {
   );
 }
 
+const SUBGRID_ROW = "col-span-full grid grid-cols-subgrid";
+
+// 표 렌더링. HTML 표는 행 높이를 내용에 맞추므로 grid 로 배치해 본문 행을 가장 높은 행에 맞춤. display 변경으로 표 의미가 사라지지 않도록 role 을 지정함
 function TableBlock({ caption, columns, rows }: { caption?: string; columns: string[]; rows: string[][] }) {
   return (
     <div className="flex flex-col gap-2">
       {caption && <h3 className="font-semibold">{caption}</h3>}
       <div className="rounded-xl border bg-card">
-        <Table className="min-w-[40rem]">
-          <TableHeader>
-            <TableRow>
+        <Table
+          role="table"
+          className="grid min-w-[40rem] grid-cols-[minmax(7rem,1fr)_minmax(10rem,2fr)_minmax(14rem,3fr)]"
+        >
+          <TableHeader role="rowgroup" className={SUBGRID_ROW}>
+            <TableRow role="row" className={SUBGRID_ROW}>
               {columns.map((column) => (
-                <TableHead key={column} className="px-3">
+                <TableHead key={column} role="columnheader" className="content-center px-3">
                   {column}
                 </TableHead>
               ))}
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody role="rowgroup" className={`${SUBGRID_ROW} auto-rows-fr`}>
             {rows.map((row) => (
-              <TableRow key={row[0]}>
+              <TableRow key={row[0]} role="row" className={SUBGRID_ROW}>
                 {row.map((cell, index) => (
                   <TableCell
                     key={cell}
-                    className={`px-3 align-top leading-6 whitespace-normal ${index === 0 ? "font-medium" : "text-muted-foreground"}`}
+                    role="cell"
+                    className={`content-center px-3 leading-6 whitespace-normal ${index === 0 ? "font-medium" : "text-muted-foreground"}`}
                   >
                     <InlineText text={cell} />
                   </TableCell>
