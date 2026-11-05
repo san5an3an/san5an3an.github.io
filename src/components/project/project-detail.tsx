@@ -5,13 +5,11 @@ import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
 
 import { ProjectBlockView } from "@/components/project/project-blocks";
 import { MinariShowcase } from "@/components/project/showcases/minari-showcase";
-import { WeOnShowcase } from "@/components/project/showcases/we-on-showcase";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import type { Project } from "@/lib/projects";
 
 const showcases: Record<string, ComponentType> = {
-  "we-on": WeOnShowcase,
   "minari-design-storybook": MinariShowcase,
 };
 
