@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
 
@@ -73,6 +74,28 @@ export function ProjectDetail({ project, previous, next }: ProjectDetailProps) {
       </dl>
 
       {Showcase && <Showcase />}
+
+      {project.screens && (
+        <div
+          data-autolayout
+          data-testid="project-screens"
+          className="grid gap-4 lg:grid-cols-2"
+        >
+          {project.screens.map((screen) => (
+            <figure key={screen.src} className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-2">
+              <Image
+                src={screen.src}
+                alt={screen.alt}
+                width={screen.width}
+                height={screen.height}
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                className="h-auto w-full rounded-lg border"
+              />
+              <figcaption className="px-1 pb-1 text-xs text-muted-foreground">{screen.caption}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_12rem] lg:gap-14">
         <div className="flex min-w-0 flex-col gap-12">

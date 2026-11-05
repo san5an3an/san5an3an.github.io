@@ -10,6 +10,14 @@ export type ProjectSectionContent = {
   blocks: ProjectBlock[];
 };
 
+export type ProjectScreen = {
+  src: string;
+  alt: string;
+  caption: string;
+  width: number;
+  height: number;
+};
+
 export type Project = {
   slug: string;
   name: string;
@@ -19,6 +27,7 @@ export type Project = {
   stack: string[];
   repoUrl: string;
   facts: { label: string; value: string }[];
+  screens?: ProjectScreen[];
   sections: ProjectSectionContent[];
 };
 
@@ -250,6 +259,36 @@ export const projects: Project[] = [
       { label: "디자인 시스템", value: "20종" },
       { label: "컴포넌트 계약", value: "74종" },
       { label: "UI 라이브러리", value: "18종 이상" },
+    ],
+    screens: [
+      {
+        src: "/screens/minari/usage-shadcn-cobalt.webp",
+        alt: "shadcn/ui 와 Cobalt 디자인 시스템을 조합한 Usage 대시보드 화면",
+        caption: "shadcn/ui + Cobalt, Usage 대시보드",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/minari/usage-mui-plum.webp",
+        alt: "MUI 와 Plum 디자인 시스템을 조합한 Usage 화면",
+        caption: "MUI + Plum, Usage 화면",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/minari/usage-antd-ember.webp",
+        alt: "Ant Design 과 Ember 디자인 시스템을 조합한 Usage 화면",
+        caption: "Ant Design + Ember, Usage 화면",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/minari/catalog-button.webp",
+        alt: "Cobalt 디자인 시스템의 Button 컴포넌트 카탈로그 화면",
+        caption: "Cobalt, Button 컴포넌트 카탈로그",
+        width: 2880,
+        height: 1800,
+      },
     ],
     sections: [
       {

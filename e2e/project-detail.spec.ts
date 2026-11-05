@@ -227,6 +227,73 @@ test.describe("minari 상세 화면 컬러칩", () => {
   });
 });
 
+test.describe("상세 화면 실제 화면 이미지", () => {
+  const screens = (page: Page) => page.getByTestId("project-screens");
+
+  test("minari 상세 화면에 고해상도 화면 이미지 4장과 설명을 표시함", async ({ page }) => {
+    await page.goto("/projects/minari-design-storybook/");
+    await skipButton(page).click();
+    await screens(page).scrollIntoViewIfNeeded();
+
+    const images = screens(page).getByRole("img");
+    await expect(images).toHaveCount(4);
+    await expect(screens(page).locator("figcaption")).toHaveCount(4);
+    await expect(images.first()).toHaveAttribute("alt", /Usage 대시보드/);
+
+    for (const image of await images.all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(2880);
+    }
+  });
+
+  test("이미지를 불러오기 전과 후의 위치가 같아 조립 위치가 틀어지지 않음", async ({ page }) => {
+    await page.goto("/projects/minari-design-storybook/");
+    await skipButton(page).click();
+    const image = screens(page).getByRole("img").last();
+    const box = () => image.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: Math.round(rect.width), height: Math.round(rect.height) };
+    });
+
+    const before = await box();
+    expect(before.height).toBeGreaterThan(0);
+    await image.scrollIntoViewIfNeeded();
+    await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).complete)).toBe(true);
+    expect(await box()).toEqual(before);
+  });
+
+  test("이미지 영역도 조립 대상이라 스크롤 전에는 숨겨져 있고 끝까지 조립하면 보임", async ({ page }) => {
+    await page.goto("/projects/minari-design-storybook/");
+    await expect(statusBar(page)).toBeVisible();
+    await expect(screens(page).getByRole("img").first()).toHaveAttribute("data-build-hidden");
+
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = "auto";
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    await expect(replayButton(page)).toBeVisible({ timeout: 25000 });
+    await expect(screens(page).getByRole("img").first()).toHaveCSS("opacity", "1");
+  });
+
+  test("이미지가 없는 프로젝트에는 이미지 영역을 만들지 않음", async ({ page }) => {
+    await page.goto("/projects/we-on/");
+    await skipButton(page).click();
+    await expect(screens(page)).toHaveCount(0);
+  });
+
+  test("모바일 폭에서도 이미지가 화면 폭을 넘지 않음", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/projects/minari-design-storybook/");
+    await skipButton(page).click();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    const width = await screens(page).getByRole("img").first().evaluate((element) => element.getBoundingClientRect().width);
+    expect(width).toBeLessThanOrEqual(390);
+  });
+});
+
 test.describe("상세 화면 표 배치", () => {
   // 표마다 본문 행 높이의 최대와 최소 차이, 머리글과 첫 행의 열 위치 일치 여부 측정
   function measureTables(page: Page) {
