@@ -414,10 +414,18 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     await expect(screens(page).getByRole("img").first()).toHaveCSS("opacity", "1");
   });
 
-  test("이미지가 없는 프로젝트에는 이미지 영역을 만들지 않음", async ({ page }) => {
+  test("WE-ON 상세 화면에 고해상도 앱 화면 4장과 설명을 표시함", async ({ page }) => {
     await page.goto("/projects/we-on/");
     await skipButton(page).click();
-    await expect(screens(page)).toHaveCount(0);
+    await screens(page).scrollIntoViewIfNeeded();
+
+    await expect(screens(page).locator("figcaption")).toHaveText(["홈", "검색", "가계부", "내 정보"]);
+    const images = screens(page).getByRole("img");
+    await expect(images).toHaveCount(4);
+    for (const image of await images.all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1206);
+    }
   });
 
   test("GREEON 상세 화면에 고해상도 앱 화면 4장과 설명을 표시함", async ({ page }) => {
@@ -434,13 +442,15 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     }
   });
 
-  test("예시 값 안내 문구를 GREEON 상세 화면에만 표시함", async ({ page }) => {
+  test("예시 값 안내 문구를 WE-ON, GREEON 상세 화면에만 표시함", async ({ page }) => {
     const note = page.getByText("화면의 값은 예시이며, 실제와는 다를 수 있습니다.", { exact: true });
 
-    await page.goto("/projects/greeon/");
-    await skipButton(page).click();
-    await note.scrollIntoViewIfNeeded();
-    await expect(note).toBeVisible();
+    for (const slug of ["we-on", "greeon"]) {
+      await page.goto(`/projects/${slug}/`);
+      await skipButton(page).click();
+      await note.scrollIntoViewIfNeeded();
+      await expect(note).toBeVisible();
+    }
 
     await page.goto("/projects/minari-design-storybook/");
     await skipButton(page).click();
@@ -451,6 +461,10 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     await page.goto("/projects/greeon/");
     await skipButton(page).click();
     await expect(page.getByText("GREEON / 홈")).toHaveCount(0);
+
+    await page.goto("/projects/we-on/");
+    await skipButton(page).click();
+    await expect(page.getByText("WE-ON / 홈")).toHaveCount(0);
   });
 
   test("세로 앱 화면은 넓은 폭에서 한 줄에 4장, 모바일 폭에서 2장씩 표시함", async ({ page }) => {

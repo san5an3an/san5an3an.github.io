@@ -52,6 +52,37 @@ export const projects: Project[] = [
       { label: "서버 테스트", value: "24개" },
       { label: "가게 데이터", value: "약 30만 곳" },
     ],
+    screens: [
+      {
+        src: "/screens/we-on/home.webp",
+        alt: "가장 가까운 식당과 이번 달 가계부 요약을 보여주는 WE-ON 홈 화면",
+        caption: "홈",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/we-on/search.webp",
+        alt: "동네 이름으로 찾은 가게 목록과 가맹 종류 필터를 보여주는 검색 화면",
+        caption: "검색",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/we-on/account.webp",
+        alt: "이번 달 예산 사용률과 날짜별 지출 내역을 보여주는 가계부 화면",
+        caption: "가계부",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/we-on/my-page.webp",
+        alt: "프로필과 이번 달 사용액, 설정 메뉴를 보여주는 내 정보 화면",
+        caption: "내 정보",
+        width: 1206,
+        height: 2622,
+      },
+    ],
+    screensNote: "화면의 값은 예시이며, 실제와는 다를 수 있습니다.",
     sections: [
       {
         id: "features",
