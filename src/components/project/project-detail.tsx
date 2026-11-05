@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
 
 import { ProjectBlockView } from "@/components/project/project-blocks";
-import { GreeonShowcase } from "@/components/project/showcases/greeon-showcase";
 import { MinariShowcase } from "@/components/project/showcases/minari-showcase";
 import { WeOnShowcase } from "@/components/project/showcases/we-on-showcase";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,6 @@ import type { Project } from "@/lib/projects";
 const showcases: Record<string, ComponentType> = {
   "we-on": WeOnShowcase,
   "minari-design-storybook": MinariShowcase,
-  greeon: GreeonShowcase,
 };
 
 type ProjectDetailProps = {
@@ -26,6 +24,8 @@ type ProjectDetailProps = {
 // 프로젝트 소개, 화면 구조, 상세 내용, 이전과 다음 프로젝트 링크 표시
 export function ProjectDetail({ project, previous, next }: ProjectDetailProps) {
   const Showcase = showcases[project.slug];
+  // 세로로 긴 앱 화면은 넓은 폭에서 한 줄에 4장씩 표시
+  const isPhoneScreens = project.screens?.some((screen) => screen.height > screen.width);
 
   return (
     <article className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-8 sm:gap-14 sm:px-8 sm:py-12">
@@ -76,24 +76,27 @@ export function ProjectDetail({ project, previous, next }: ProjectDetailProps) {
       {Showcase && <Showcase />}
 
       {project.screens && (
-        <div
-          data-autolayout
-          data-testid="project-screens"
-          className="grid gap-4 lg:grid-cols-2"
-        >
-          {project.screens.map((screen) => (
-            <figure key={screen.src} className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-2">
-              <Image
-                src={screen.src}
-                alt={screen.alt}
-                width={screen.width}
-                height={screen.height}
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="h-auto w-full rounded-lg border"
-              />
-              <figcaption className="px-1 pb-1 text-xs text-muted-foreground">{screen.caption}</figcaption>
-            </figure>
-          ))}
+        <div className="flex flex-col gap-3">
+          <div
+            data-autolayout
+            data-testid="project-screens"
+            className={isPhoneScreens ? "grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" : "grid gap-4 lg:grid-cols-2"}
+          >
+            {project.screens.map((screen) => (
+              <figure key={screen.src} className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-2">
+                <Image
+                  src={screen.src}
+                  alt={screen.alt}
+                  width={screen.width}
+                  height={screen.height}
+                  sizes={isPhoneScreens ? "(min-width: 768px) 25vw, 50vw" : "(min-width: 1024px) 50vw, 100vw"}
+                  className="h-auto w-full rounded-lg border"
+                />
+                <figcaption className="px-1 pb-1 text-xs text-muted-foreground">{screen.caption}</figcaption>
+              </figure>
+            ))}
+          </div>
+          {project.screensNote && <p className="text-sm text-muted-foreground">{project.screensNote}</p>}
         </div>
       )}
 
