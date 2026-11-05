@@ -28,6 +28,7 @@ export type Project = {
   repoUrl: string;
   facts: { label: string; value: string }[];
   screens?: ProjectScreen[];
+  screensNote?: string;
   sections: ProjectSectionContent[];
 };
 
@@ -385,6 +386,37 @@ export const projects: Project[] = [
       { label: "지도", value: "KakaoMapsSDK" },
       { label: "개발 기간", value: "2024.02 ~ 2026.07" },
     ],
+    screens: [
+      {
+        src: "/screens/greeon/home.webp",
+        alt: "충전 내역과 자주 이용한 충전소를 보여주는 GREEON 홈 화면",
+        caption: "홈",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/greeon/charger-select.webp",
+        alt: "충전기별 상태와 충전시작 버튼을 보여주는 충전기 선택 화면",
+        caption: "충전기 선택",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/greeon/charging.webp",
+        alt: "충전 진행률과 충전량, 충전 금액을 보여주는 충전 중 화면",
+        caption: "충전 중",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/greeon/my-greeon.webp",
+        alt: "포인트와 메뉴를 보여주는 나의 그리온 화면",
+        caption: "나의 그리온",
+        width: 1206,
+        height: 2622,
+      },
+    ],
+    screensNote: "화면의 값은 예시이며, 실제와는 다를 수 있습니다.",
     sections: [
       {
         id: "screens",

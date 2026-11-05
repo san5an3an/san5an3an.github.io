@@ -281,6 +281,61 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     await expect(screens(page)).toHaveCount(0);
   });
 
+  test("GREEON 상세 화면에 고해상도 앱 화면 4장과 설명을 표시함", async ({ page }) => {
+    await page.goto("/projects/greeon/");
+    await skipButton(page).click();
+    await screens(page).scrollIntoViewIfNeeded();
+
+    await expect(screens(page).locator("figcaption")).toHaveText(["홈", "충전기 선택", "충전 중", "나의 그리온"]);
+    const images = screens(page).getByRole("img");
+    await expect(images).toHaveCount(4);
+    for (const image of await images.all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1206);
+    }
+  });
+
+  test("예시 값 안내 문구를 GREEON 상세 화면에만 표시함", async ({ page }) => {
+    const note = page.getByText("화면의 값은 예시이며, 실제와는 다를 수 있습니다.", { exact: true });
+
+    await page.goto("/projects/greeon/");
+    await skipButton(page).click();
+    await note.scrollIntoViewIfNeeded();
+    await expect(note).toBeVisible();
+
+    await page.goto("/projects/minari-design-storybook/");
+    await skipButton(page).click();
+    await expect(note).toHaveCount(0);
+  });
+
+  test("도형으로 그린 프레임 대신 실제 앱 화면만 표시함", async ({ page }) => {
+    await page.goto("/projects/greeon/");
+    await skipButton(page).click();
+    await expect(page.getByText("GREEON / 홈")).toHaveCount(0);
+  });
+
+  test("세로 앱 화면은 넓은 폭에서 한 줄에 4장, 모바일 폭에서 2장씩 표시함", async ({ page }) => {
+    const rowTops = () =>
+      screens(page).locator("figure").evaluateAll((figures) =>
+        figures.map((figure) => Math.round(figure.getBoundingClientRect().top + window.scrollY)),
+      );
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/projects/greeon/");
+    await skipButton(page).click();
+    expect(new Set(await rowTops()).size).toBe(1);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const [first, second, third, fourth] = await rowTops();
+    expect(first).toBe(second);
+    expect(third).toBe(fourth);
+    expect(third).toBeGreaterThan(first);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test("모바일 폭에서도 이미지가 화면 폭을 넘지 않음", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/projects/minari-design-storybook/");
