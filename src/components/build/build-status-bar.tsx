@@ -1,4 +1,3 @@
-import type { Ref } from "react";
 import { ChevronDown, Pause, Play, RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,6 @@ import { Progress } from "@/components/ui/progress";
 import type { BuildStatus } from "@/lib/build/types";
 
 type BuildStatusBarProps = {
-  ref?: Ref<HTMLDivElement>;
   status: BuildStatus;
   onTogglePause: () => void;
   onToggleSpeed: () => void;
@@ -16,7 +14,6 @@ type BuildStatusBarProps = {
 
 // 조립 진행 상황과 재생 제어 버튼 표시
 export function BuildStatusBar({
-  ref,
   status,
   onTogglePause,
   onToggleSpeed,
@@ -43,7 +40,6 @@ export function BuildStatusBar({
 
   return (
     <div
-      ref={ref}
       data-testid="build-status"
       className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-popover py-1 pr-1 pl-3 text-xs whitespace-nowrap text-popover-foreground shadow-lg sm:gap-3"
     >

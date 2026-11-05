@@ -59,7 +59,7 @@ export type Step = {
 export type Agent = {
   color: string;
   onColor: string;
-  name: string | null;
+  name: string;
   size: number;
   arc: number;
   x: number;

@@ -44,7 +44,6 @@ function decideStartMode(): StartMode {
 // 조립 애니메이션의 Canvas 와 상태 막대를 페이지 위에 표시
 export function BuildOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dockRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BuildEngine | null>(null);
   const startModeRef = useRef<StartMode | null>(null);
   const [status, setStatus] = useState<BuildStatus | null>(null);
@@ -65,12 +64,6 @@ export function BuildOverlay() {
       root,
       canvas,
       onStatus: setStatus,
-      getDockPoint: () => {
-        const box = dockRef.current?.getBoundingClientRect();
-        return box
-          ? { x: box.left + box.width / 2, y: box.top + box.height / 2 }
-          : { x: window.innerWidth / 2, y: window.innerHeight - 40 };
-      },
     });
     engineRef.current = engine;
 
@@ -102,11 +95,11 @@ export function BuildOverlay() {
         ref={canvasRef}
         aria-hidden
         data-build-canvas
+        data-build-cursors={status?.agents}
         className="pointer-events-none fixed inset-0 z-40 hidden size-full"
       />
       {status && (
         <BuildStatusBar
-          ref={dockRef}
           status={status}
           onTogglePause={() => engineRef.current?.togglePause()}
           onToggleSpeed={() => engineRef.current?.toggleSpeed()}
