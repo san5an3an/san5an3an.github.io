@@ -185,20 +185,18 @@ function drawAgent(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agen
     ctx.restore();
   }
 
-  if (agent.name) {
-    ctx.font = `600 11.5px ${scene.tokens.fontFamily}`;
-    const width = ctx.measureText(agent.name).width + 12;
-    const left = agent.x + agent.size * 0.7;
-    const top = agent.y + agent.size * 0.75;
-    ctx.fillStyle = agent.color;
-    ctx.beginPath();
-    ctx.roundRect(left, top, width, 20, 4);
-    ctx.fill();
-    ctx.fillStyle = agent.onColor;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(agent.name, left + 6, top + 10.5);
-  }
+  ctx.font = `600 11.5px ${scene.tokens.fontFamily}`;
+  const width = ctx.measureText(agent.name).width + 12;
+  const left = agent.x + agent.size * 0.7;
+  const top = agent.y + agent.size * 0.75;
+  ctx.fillStyle = agent.color;
+  ctx.beginPath();
+  ctx.roundRect(left, top, width, 20, 4);
+  ctx.fill();
+  ctx.fillStyle = agent.onColor;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(agent.name, left + 6, top + 10.5);
   ctx.globalAlpha = 1;
 }
 

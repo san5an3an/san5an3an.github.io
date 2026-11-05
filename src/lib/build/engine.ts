@@ -14,16 +14,17 @@ import type {
   Step,
 } from "./types";
 
-const AGENT_NAMES = ["UI/UX", "iOS", "Flutter", "React", "Agent"];
+const AGENT_NAMES = ["UI/UX", "iOS", "Flutter", "React", "Agent", "SwiftUI", "TypeScript", "Design System", "UIKit", "Next.js"];
+const AGENT_SIZE = 20;
 const DESKTOP_AGENT_COUNT = 28;
 const MOBILE_AGENT_COUNT = 14;
 const AMBIENT_AGENT_COUNT = 3;
 const FIRST_AGENT_COUNT = 6;
 const AGENTS_PER_SECOND = 5;
 const IDLE_DELAY = 1100;
-const LEAVE_DURATION = 900;
 const STATUS_INTERVAL = 100;
 const SWEEP_INTERVAL = 200;
+const OFF_SCREEN_MARGIN = 40;
 const MAX_FRAME_TIME = 50;
 const PASSED_MARGIN = 20;
 const VIEW_BOTTOM_RATIO = 0.96;
@@ -36,7 +37,6 @@ type EngineOptions = {
   root: HTMLElement;
   canvas: HTMLCanvasElement;
   onStatus: (status: BuildStatus) => void;
-  getDockPoint: () => Point;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -45,10 +45,6 @@ function clamp(value: number, min: number, max: number) {
 
 function easeInOut(value: number) {
   return value < 0.5 ? 4 * value * value * value : 1 - (-2 * value + 2) ** 3 / 2;
-}
-
-function easeOut(value: number) {
-  return 1 - (1 - value) ** 3;
 }
 
 function randomBetween(min: number, max: number) {
@@ -104,8 +100,8 @@ export class BuildEngine {
   private lastStatus = 0;
   private lastSweep = 0;
   private idleTime = 0;
-  private leaveTime = 0;
-  private leaving = false;
+  private roaming = false;
+  private lastAgentCount = 0;
   private started = false;
   private finished = false;
   private needsRemeasure = false;
@@ -126,17 +122,16 @@ export class BuildEngine {
   // 요소를 숨기고 커서를 준비한 뒤 재생 시작
   start() {
     this.started = true;
+    this.addListeners();
     this.prepare();
-    window.addEventListener("resize", this.handleResize);
-    this.options.root.addEventListener("focusin", this.handleFocus);
-    document.fonts?.addEventListener("loadingdone", this.handleFontsLoaded);
     this.runLoop();
   }
 
-  // 재생 없이 완성된 화면 상태를 알려 다시 보기 버튼만 표시
+  // 조립 재생 없이 완성된 화면에서 커서 3개만 돌아다니게 표시
   showFinished() {
-    this.finished = true;
-    this.emitStatus();
+    this.started = true;
+    this.addListeners();
+    this.startRoaming();
   }
 
   // 처음 상태로 되돌려 다시 재생
@@ -170,11 +165,8 @@ export class BuildEngine {
   // 남은 과정을 건너뛰고 완성된 화면 표시
   finishNow() {
     this.resetElements();
-    this.finished = true;
-    this.leaving = false;
     this.done = this.layers.length;
-    this.stopLoop();
-    this.emitStatus();
+    this.startRoaming();
   }
 
   // 이벤트와 애니메이션을 정리하고 완성된 화면 상태로 복구
@@ -187,6 +179,12 @@ export class BuildEngine {
     this.resetElements();
   }
 
+  private addListeners() {
+    window.addEventListener("resize", this.handleResize);
+    this.options.root.addEventListener("focusin", this.handleFocus);
+    document.fonts?.addEventListener("loadingdone", this.handleFontsLoaded);
+  }
+
   private prepare() {
     const collected = collectLayers(this.options.root);
     this.layers = collected.layers;
@@ -195,43 +193,65 @@ export class BuildEngine {
     for (const layer of this.layers) layer.el.setAttribute("data-build-hidden", "");
     delete document.documentElement.dataset.build;
 
+    this.prepareScene();
+
+    this.flashes = [];
+    this.elapsed = 0;
+    this.idleTime = 0;
+    this.lastStatus = 0;
+    this.lastSweep = 0;
+    this.done = 0;
+    this.roaming = false;
+    this.finished = false;
+    this.paused = false;
+    this.options.canvas.style.display = "block";
+    this.emitStatus();
+  }
+
+  // Canvas 크기와 토큰을 읽고 name tag 가 달린 커서 생성
+  private prepareScene() {
     this.resizeCanvas();
     this.layoutWidth = window.innerWidth;
     const { tokens, palette } = readTokens();
     this.tokens = tokens;
 
     const count = window.innerWidth < 768 ? MOBILE_AGENT_COUNT : DESKTOP_AGENT_COUNT;
-    this.agents = Array.from({ length: count }, (_, index): Agent => {
-      const shade = palette[index % palette.length];
-      const name = AGENT_NAMES[index] ?? null;
-      return {
-        ...shade,
-        name,
-        size: name ? 20 : randomBetween(13, 17),
-        arc: Math.random() < 0.5 ? -1 : 1,
-        ...this.entryPoint(),
-        alpha: 0,
-        active: false,
-        busy: false,
-        tool: "arrow",
-        draft: null,
-        caret: null,
-        steps: [],
-        stepElapsed: 0,
-      };
-    });
+    this.agents = Array.from({ length: count }, (_, index): Agent => ({
+      ...palette[index % palette.length],
+      name: AGENT_NAMES[index % AGENT_NAMES.length],
+      size: AGENT_SIZE,
+      arc: Math.random() < 0.5 ? -1 : 1,
+      ...this.entryPoint(),
+      alpha: 0,
+      active: false,
+      busy: false,
+      tool: "arrow",
+      draft: null,
+      caret: null,
+      steps: [],
+      stepElapsed: 0,
+    }));
+  }
 
-    this.flashes = [];
-    this.elapsed = 0;
-    this.idleTime = 0;
-    this.leaveTime = 0;
-    this.lastStatus = 0;
-    this.lastSweep = 0;
-    this.done = 0;
-    this.leaving = false;
-    this.finished = false;
+  // 완성된 화면 위에서 커서 3개만 돌아다니는 상태로 전환
+  private startRoaming() {
+    if (this.agents.length === 0) this.prepareScene();
+    this.roaming = true;
+    this.finished = true;
     this.paused = false;
     this.options.canvas.style.display = "block";
+    this.runLoop();
+    this.emitStatus();
+  }
+
+  // 마무리 동작까지 끝나면 효과용 표시를 지우고 다시 보기 버튼으로 전환
+  private completeBuild() {
+    for (const el of Array.from(this.savedInlineStyles.keys())) this.restoreInlineStyle(el);
+    for (const layer of this.layers) {
+      layer.el.removeAttribute("data-build-hidden");
+      layer.el.removeAttribute("data-build-phase");
+    }
+    this.finished = true;
     this.emitStatus();
   }
 
@@ -251,6 +271,7 @@ export class BuildEngine {
     }
     for (const agent of this.agents) {
       agent.active = false;
+      agent.busy = false;
       agent.steps = [];
       agent.draft = null;
       agent.caret = null;
@@ -292,10 +313,9 @@ export class BuildEngine {
   }
 
   private handleResize = () => {
-    if (this.finished) return;
     this.resizeCanvas();
     // 폭이 바뀌면 측정한 위치가 모두 틀어지므로 완성된 화면으로 전환함
-    if (window.innerWidth !== this.layoutWidth) this.finishNow();
+    if (!this.finished && window.innerWidth !== this.layoutWidth) this.finishNow();
   };
 
   private handleFontsLoaded = () => {
@@ -335,11 +355,12 @@ export class BuildEngine {
   private frame = (now: number) => {
     const delta = Math.min(now - this.lastFrame, MAX_FRAME_TIME);
     this.lastFrame = now;
-    if (!this.paused) this.update(delta * this.speed);
-    if (this.finished) return;
+    if (!this.paused) this.update(delta * (this.finished ? 1 : this.speed));
     this.paint();
-    if (now - this.lastStatus > STATUS_INTERVAL) {
+    const agentCount = this.agents.filter((agent) => agent.active).length;
+    if (now - this.lastStatus > STATUS_INTERVAL && (!this.finished || agentCount !== this.lastAgentCount)) {
       this.lastStatus = now;
+      this.lastAgentCount = agentCount;
       this.emitStatus();
     }
     this.frameHandle = requestAnimationFrame(this.frame);
@@ -368,15 +389,17 @@ export class BuildEngine {
       paused: this.paused,
       speed: this.speed,
       finished: this.finished,
-      waiting: !this.leaving && this.idleTime > IDLE_DELAY,
+      waiting: !this.roaming && this.idleTime > IDLE_DELAY,
       colors: this.agents.slice(0, 5).map((agent) => agent.color),
     });
   }
 
   private update(delta: number) {
     this.elapsed += delta;
-    this.remeasureIfReady();
-    this.sweepPassedLayers();
+    if (!this.roaming) {
+      this.remeasureIfReady();
+      this.sweepPassedLayers();
+    }
     this.updateAgentPool(delta);
     for (const agent of this.agents) {
       if (agent.active) this.advanceAgent(agent, delta);
@@ -384,21 +407,19 @@ export class BuildEngine {
     for (const flash of this.flashes) flash.age += delta;
     this.flashes = this.flashes.filter((flash) => flash.age < flash.ttl);
 
-    if (!this.leaving && this.done >= this.layers.length) this.beginLeaving();
-    if (this.leaving) {
-      this.leaveTime += delta;
-      if (this.leaveTime > LEAVE_DURATION) this.finishNow();
+    if (!this.roaming && this.done >= this.layers.length) this.roaming = true;
+    if (this.roaming && !this.finished && !this.agents.some((agent) => agent.active && agent.busy)) {
+      this.completeBuild();
     }
   }
 
   // 할 일의 양에 맞춰 화면에 나타나는 커서 수 조절
   private updateAgentPool(delta: number) {
-    if (this.leaving) return;
-    const hasWork = this.hasAvailableWork();
+    const hasWork = !this.roaming && this.hasAvailableWork();
     this.idleTime = hasWork ? 0 : this.idleTime + delta;
 
     const ramp = Math.floor(FIRST_AGENT_COUNT + (this.elapsed / 1000) * AGENTS_PER_SECOND);
-    const desired = this.idleTime > IDLE_DELAY ? AMBIENT_AGENT_COUNT : Math.min(this.agents.length, ramp);
+    const desired = this.roaming || this.idleTime > IDLE_DELAY ? AMBIENT_AGENT_COUNT : Math.min(this.agents.length, ramp);
 
     this.agents.forEach((agent, index) => {
       if (index < desired && !agent.active) {
@@ -484,11 +505,12 @@ export class BuildEngine {
     agent.tool = "arrow";
     agent.draft = null;
     agent.caret = null;
-    agent.busy = true;
-    if (this.leaving) {
-      agent.steps = [{ duration: 1000 }];
+    if (this.roaming) {
+      agent.busy = false;
+      agent.steps = this.roamSteps(agent);
       return;
     }
+    agent.busy = true;
     agent.steps = this.claimGroupWork(agent) ?? this.claimLayerWork(agent) ?? this.idleSteps(agent);
   }
 
@@ -537,6 +559,30 @@ export class BuildEngine {
       y: window.scrollY + randomBetween(0.55, 0.92) * this.height,
     };
     return [this.travel(agent, target, randomBetween(1400, 2400)), { duration: randomBetween(1200, 3000) }];
+  }
+
+  // 완성된 화면 안을 천천히 돌아다니는 동작 생성. 스크롤로 화면 밖에 남으면 멈추지 않고 바로 돌아옴
+  private roamSteps(agent: Agent): Step[] {
+    const target = {
+      x: window.scrollX + randomBetween(0.08, 0.92) * this.width,
+      y: window.scrollY + randomBetween(0.12, 0.88) * this.height,
+    };
+    const pause: Step = {
+      duration: randomBetween(1200, 3000),
+      tick: () => {
+        if (this.isOffScreen(agent)) agent.stepElapsed = pause.duration;
+      },
+    };
+    return [this.travel(agent, target, randomBetween(1400, 2400)), pause];
+  }
+
+  private isOffScreen(point: Point) {
+    return (
+      point.x < window.scrollX - OFF_SCREEN_MARGIN ||
+      point.x > window.scrollX + this.width + OFF_SCREEN_MARGIN ||
+      point.y < window.scrollY - OFF_SCREEN_MARGIN ||
+      point.y > window.scrollY + this.height + OFF_SCREEN_MARGIN
+    );
   }
 
   // 커서를 곡선으로 목표 지점까지 이동
@@ -925,35 +971,6 @@ export class BuildEngine {
     const forget = () => this.animations.delete(animation);
     animation.onfinish = forget;
     animation.oncancel = forget;
-  }
-
-  // 모든 요소가 완성되면 커서를 상태 막대 쪽으로 모아 제거
-  private beginLeaving() {
-    this.leaving = true;
-    this.leaveTime = 0;
-    const dock = this.options.getDockPoint();
-    const target = { x: dock.x + window.scrollX, y: dock.y + window.scrollY };
-    for (const agent of this.agents) {
-      if (!agent.active) continue;
-      agent.busy = true;
-      agent.draft = null;
-      agent.caret = null;
-      agent.tool = "arrow";
-      agent.stepElapsed = 0;
-      const startAlpha = agent.alpha;
-      const move = this.travel(agent, target, randomBetween(520, 820));
-      const moveTick = move.tick;
-      agent.steps = [
-        {
-          duration: move.duration,
-          tick: (progress) => {
-            moveTick?.(progress);
-            agent.alpha = startAlpha * (1 - easeOut(progress) * 0.9);
-          },
-        },
-        { duration: 1000 },
-      ];
-    }
   }
 
   // 화면 가장자리 바깥의 무작위 시작 위치 계산

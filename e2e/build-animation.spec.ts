@@ -16,7 +16,8 @@ async function expectFinishedPage(page: Page, timeout = 5000) {
   await expect(replayButton(page)).toBeVisible({ timeout });
   await expect(statusBar(page)).toHaveCount(0);
   await expect(hiddenElements(page)).toHaveCount(0);
-  await expect(canvas(page)).toBeHidden();
+  await expect(canvas(page)).toBeVisible();
+  await expect(canvas(page)).toHaveAttribute("data-build-cursors", "3", { timeout });
 }
 
 test.describe("조립 애니메이션 재생", () => {
@@ -141,6 +142,27 @@ test.describe("조립 애니메이션 접근성과 대체 화면", () => {
     await expect(link).toHaveAttribute("data-build-hidden");
     await link.focus();
     await expect(link).not.toHaveAttribute("data-build-hidden");
+  });
+
+  test("건너뛰면 완성된 화면 위에 커서 3개만 남아 계속 움직임", async ({ page }) => {
+    await page.goto("/");
+    await skipButton(page).click();
+    await expectFinishedPage(page);
+
+    const drawing = () => canvas(page).evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+    const first = await drawing();
+    await expect.poll(drawing, { timeout: 5000 }).not.toBe(first);
+  });
+
+  test("다시 보기를 누르면 돌아다니던 커서가 조립을 처음부터 다시 시작함", async ({ page }) => {
+    await page.goto("/");
+    await skipButton(page).click();
+    await expectFinishedPage(page);
+
+    await replayButton(page).click();
+    await expect(statusBar(page)).toBeVisible();
+    await expect(page.locator("[data-build-hidden]").first()).toBeAttached();
+    await expect.poll(async () => Number(await canvas(page).getAttribute("data-build-cursors")), { timeout: 8000 }).toBeGreaterThan(3);
   });
 
   test("움직임 줄이기 설정에서는 Canvas 와 상태 막대 없이 완성된 화면을 바로 표시함", async ({ browser }) => {

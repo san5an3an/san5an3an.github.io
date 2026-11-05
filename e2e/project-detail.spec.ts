@@ -5,6 +5,7 @@ const SLUGS = ["we-on", "minari-design-storybook", "greeon"];
 const statusBar = (page: Page) => page.getByTestId("build-status");
 const hiddenElements = (page: Page) => page.locator("[data-build-hidden]");
 const replayButton = (page: Page) => page.getByRole("button", { name: "다시 보기" });
+const cursorCanvas = (page: Page) => page.locator("canvas[data-build-canvas]");
 const skipButton = (page: Page) => statusBar(page).getByRole("button", { name: "애니메이션 건너뛰기" });
 const projectCard = (page: Page, name: string) =>
   page.locator('#projects [data-slot="card"]').filter({ has: page.locator('[data-slot="card-title"]', { hasText: name }) });
@@ -131,7 +132,7 @@ test.describe("프로젝트 상세 화면 조립 애니메이션", () => {
     await expect(page.locator("article h1")).toHaveAttribute("data-build-hidden");
   });
 
-  test("이미 본 상세 화면으로 앞으로 가기로 돌아가면 재생하지 않고 다시 보기 버튼만 표시함", async ({ page }) => {
+  test("이미 본 상세 화면으로 앞으로 가기로 돌아가면 재생하지 않고 다시 보기 버튼과 돌아다니는 커서 3개만 표시함", async ({ page }) => {
     await page.goto("/");
     await skipButton(page).click();
     await projectCard(page, "WE-ON").getByRole("link", { name: "상세 보기" }).click();
@@ -147,6 +148,7 @@ test.describe("프로젝트 상세 화면 조립 애니메이션", () => {
     await expect(replayButton(page)).toBeVisible();
     await expect(statusBar(page)).toHaveCount(0);
     await expect(hiddenElements(page)).toHaveCount(0);
+    await expect(cursorCanvas(page)).toHaveAttribute("data-build-cursors", "3", { timeout: 5000 });
   });
 
   test("이미 본 첫 페이지로 프로젝트 목록 링크를 눌러 돌아오면 재생하지 않음", async ({ page }) => {
