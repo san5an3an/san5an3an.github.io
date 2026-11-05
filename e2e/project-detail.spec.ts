@@ -48,9 +48,146 @@ test.describe("프로젝트 상세 화면 이동", () => {
     await expect(page.locator("#projects h2")).toBeAttached();
   });
 
+  // 개발 서버는 상세 경로를 처음 컴파일하기 전에는 없는 주소에 500 을 돌려주므로 실제 상세 화면을 먼저 엶
+  async function openMissingPage(page: Page) {
+    await page.goto("/projects/greeon/");
+    return page.goto("/projects/not-a-project/");
+  }
+
   test("없는 프로젝트 주소를 열면 404 응답을 돌려줌", async ({ page }) => {
-    const response = await page.goto("/projects/not-a-project/");
+    const response = await openMissingPage(page);
     expect(response?.status()).toBe(404);
+  });
+
+  test("없는 주소 화면에 기존 머리글, 안내 문구, 돌아갈 링크를 표시함", async ({ page }) => {
+    await openMissingPage(page);
+    await skipButton(page).click();
+
+    await expect(page).toHaveTitle("404 | San Kang");
+    await expect(page.getByRole("link", { name: "San Kang" })).toBeVisible();
+    const heading = page.getByRole("heading", { level: 1 });
+    await expect(heading).toHaveCSS("font-weight", "800");
+    const description = page.getByText("찾을 수 없는 페이지예요. 요청하신 페이지가 사라졌거나, 잘못 들어오신 것 같네요 :)", { exact: true });
+    await expect(description).toBeVisible();
+    expect(await description.evaluate((element) => (element as HTMLElement).innerText)).toContain("페이지예요.\n요청하신");
+    await expect(page.getByRole("main").getByRole("link", { name: "프로젝트 보기" })).toHaveAttribute("href", "/#projects");
+
+    await page.getByRole("link", { name: "첫 페이지로" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("#top h1")).toBeVisible();
+  });
+
+  test("404 숫자만 칩 없이 자이언츠체 Inline 으로 크게 표시함", async ({ page }) => {
+    await openMissingPage(page);
+    await skipButton(page).click();
+
+    const number = page.getByRole("main").getByText("404", { exact: true });
+    await expect(number).toHaveCSS("font-family", /giantsInline/);
+    await expect(page.getByRole("main").locator('[data-slot="badge"]')).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveCSS("font-family", /giantsInline/);
+    const fontSize = await number.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+    expect(fontSize).toBeGreaterThan(100);
+    await expect.poll(() =>
+      number.evaluate((element) => document.fonts.check(`16px ${getComputedStyle(element).fontFamily}`, "404")),
+    ).toBe(true);
+  });
+
+  for (const [randomValue, title] of [
+    [0, "어라....?"],
+    [0.5, "여긴 어디 나는 누구"],
+    [0.99, "헤헤 잘못 들어왔당"],
+  ] as const) {
+    test(`무작위 값이 ${randomValue} 이면 없는 주소 제목을 "${title}" 로 표시함`, async ({ page }) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.addInitScript((value) => {
+        Math.random = () => value;
+      }, randomValue);
+      await openMissingPage(page);
+      await skipButton(page).click();
+
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test("자바스크립트가 꺼져 있으면 없는 주소에 기본 제목을 표시함", async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    await openMissingPage(page);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("어라....?");
+    await context.close();
+  });
+
+  test("404 숫자를 브랜드 파란색으로 표시함", async ({ page }) => {
+    await openMissingPage(page);
+    await skipButton(page).click();
+    const colors = await page.getByRole("main").getByText("404", { exact: true }).evaluate((element) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--semantic-fg-brand-default)";
+      document.body.append(probe);
+      const expected = getComputedStyle(probe).color;
+      probe.remove();
+      return { actual: getComputedStyle(element).color, expected };
+    });
+    expect(colors.actual).toBe(colors.expected);
+  });
+
+  test("넓은 폭에서는 404 옆에 제목, 설명, 버튼을 세로로 놓고 좁은 폭에서는 아래로 쌓음", async ({ page }) => {
+    const boxes = async () => {
+      const main = page.getByRole("main");
+      return {
+        number: await main.getByText("404", { exact: true }).boundingBox(),
+        title: await main.getByRole("heading", { level: 1 }).boundingBox(),
+        description: await main.getByText("찾을 수 없는 페이지예요", { exact: false }).boundingBox(),
+        button: await main.getByRole("link", { name: "첫 페이지로" }).boundingBox(),
+      };
+    };
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openMissingPage(page);
+    await skipButton(page).click();
+    const wide = await boxes();
+    expect(wide.title!.x).toBeGreaterThanOrEqual(wide.number!.x + wide.number!.width);
+    expect(wide.description!.x).toBe(wide.title!.x);
+    expect(wide.button!.x).toBe(wide.title!.x);
+    expect(wide.description!.y).toBeGreaterThan(wide.title!.y);
+    expect(wide.button!.y).toBeGreaterThan(wide.description!.y);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const narrow = await boxes();
+    expect(narrow.title!.y).toBeGreaterThanOrEqual(narrow.number!.y + narrow.number!.height);
+    expect(narrow.title!.x).toBe(narrow.number!.x);
+  });
+
+  test("없는 주소 화면을 열지 않으면 자이언츠체 파일을 받지 않음", async ({ page }) => {
+    const fontRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/giants.*\.otf/i.test(request.url())) fontRequests.push(request.url());
+    });
+    await page.goto("/");
+    await skipButton(page).click();
+    await page.goto("/projects/greeon/");
+    await skipButton(page).click();
+    expect(fontRequests).toEqual([]);
+  });
+
+  test("없는 주소 화면도 조립 뒤 돌아다니는 커서 3개만 남김", async ({ page }) => {
+    await openMissingPage(page);
+    await expect(statusBar(page)).toBeVisible();
+    await expect(replayButton(page)).toBeVisible({ timeout: 20000 });
+    await expect(hiddenElements(page)).toHaveCount(0);
+    await expect(cursorCanvas(page)).toHaveAttribute("data-build-cursors", "3", { timeout: 5000 });
+  });
+
+  test("모바일 폭의 없는 주소 화면이 가로로 넘치지 않음", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openMissingPage(page);
+    await skipButton(page).click();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 });
 
