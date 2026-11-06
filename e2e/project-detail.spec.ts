@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const SLUGS = ["we-on", "minari-design-storybook", "greeon"];
+const SLUGS = ["cbm-monitoring", "minari-design-storybook", "we-on", "greeon"];
 
 const statusBar = (page: Page) => page.getByTestId("build-status");
 const hiddenElements = (page: Page) => page.locator("[data-build-hidden]");
@@ -33,11 +33,26 @@ test.describe("프로젝트 상세 화면 이동", () => {
   });
 
   test("상세 화면의 다음 프로젝트 링크를 누르면 다음 프로젝트 상세 화면으로 이동함", async ({ page }) => {
-    await page.goto("/projects/we-on/");
+    await page.goto("/projects/cbm-monitoring/");
     await skipButton(page).click();
     await page.getByRole("navigation", { name: "다른 프로젝트" }).getByRole("link", { name: /다음 프로젝트/ }).click();
     await expect(page).toHaveURL(/\/projects\/minari-design-storybook\/$/);
     await expect(page.getByRole("heading", { level: 1, name: "minari-design-storybook" })).toBeAttached();
+  });
+
+  test("프로젝트 카드를 CBM, minari, WE-ON, GREEON 순서로 넓은 폭에서 한 줄에 2개씩 표시함", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    await skipButton(page).click();
+    const titles = page.locator('#projects [data-slot="card-title"]');
+    await expect(titles).toHaveText(["CBM 모니터링 시스템", "minari-design-storybook", "WE-ON", "GREEON"]);
+
+    const tops = await page.locator('#projects [data-slot="card"]').evaluateAll((cards) =>
+      cards.map((card) => Math.round(card.getBoundingClientRect().top)),
+    );
+    expect(tops[0]).toBe(tops[1]);
+    expect(tops[2]).toBe(tops[3]);
+    expect(tops[2]).toBeGreaterThan(tops[0]);
   });
 
   test("상세 화면의 프로젝트 목록 링크를 누르면 첫 페이지의 Projects 섹션으로 돌아옴", async ({ page }) => {
@@ -442,10 +457,28 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     }
   });
 
-  test("예시 값 안내 문구를 WE-ON, GREEON 상세 화면에만 표시함", async ({ page }) => {
+  test("CBM 상세 화면에 고해상도 화면 이미지 4장과 설명을 표시함", async ({ page }) => {
+    await page.goto("/projects/cbm-monitoring/");
+    await skipButton(page).click();
+    await screens(page).scrollIntoViewIfNeeded();
+
+    await expect(screens(page).locator("figcaption")).toHaveText(["플릿 개요", "이상 감지 내역", "임계 튜닝", "모델 진단"]);
+    const images = screens(page).getByRole("img");
+    await expect(images).toHaveCount(4);
+    for (const image of await images.all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(2880);
+    }
+    await expect(page.locator("article header").getByRole("link", { name: "Repository 보기" })).toHaveAttribute(
+      "href",
+      "https://github.com/san5an3an/cbm260-aibase-ml-web-react",
+    );
+  });
+
+  test("예시 값 안내 문구를 CBM, WE-ON, GREEON 상세 화면에만 표시함", async ({ page }) => {
     const note = page.getByText("화면의 값은 예시이며, 실제와는 다를 수 있습니다.", { exact: true });
 
-    for (const slug of ["we-on", "greeon"]) {
+    for (const slug of ["cbm-monitoring", "we-on", "greeon"]) {
       await page.goto(`/projects/${slug}/`);
       await skipButton(page).click();
       await note.scrollIntoViewIfNeeded();
@@ -638,7 +671,7 @@ test.describe("프로젝트 상세 화면 접근성과 대체 화면", () => {
     const page = await context.newPage();
     await page.goto("/");
     await page.locator('#projects [data-slot="card"]').first().getByRole("link", { name: "상세 보기" }).click();
-    await expect(page).toHaveURL(/\/projects\/we-on\/$/);
+    await expect(page).toHaveURL(/\/projects\/cbm-monitoring\/$/);
     await expect(page.locator("article h1")).toHaveCSS("opacity", "1");
     await expect(hiddenElements(page)).toHaveCount(0);
     await expect(statusBar(page)).toHaveCount(0);
