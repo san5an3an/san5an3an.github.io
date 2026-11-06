@@ -1,4 +1,4 @@
-import type { Agent, BuildScene, Draft, Flash, Rect } from "./types";
+import type { Agent, BuildScene, Carry, Draft, Flash, Rect } from "./types";
 
 // lucide 의 mouse-pointer-2 아이콘 경로 사용
 const CURSOR_PATH =
@@ -146,6 +146,58 @@ function drawFlash(ctx: CanvasRenderingContext2D, scene: BuildScene, flash: Flas
       break;
     }
   }
+  ctx.globalAlpha = 1;
+}
+
+// 끌고 온 사진을 놓을 수 있는 영역을 파란 테두리와 옅은 바탕으로 표시
+function drawDropTarget(ctx: CanvasRenderingContext2D, scene: BuildScene, rect: Rect) {
+  if (isOutsideView(scene, rect)) return;
+  ctx.fillStyle = scene.tokens.brand;
+  ctx.globalAlpha = 0.08;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = scene.tokens.brand;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
+}
+
+// 사진 비율을 유지한 채 썸네일 비율에 맞게 가운데를 잘라 그림. 아직 받지 못한 사진은 회색 카드로 대신함
+function drawCarry(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agent, carry: Carry) {
+  const { image, w, h, offset, label } = carry;
+  const x = agent.x + offset.x;
+  const y = agent.y + offset.y;
+  ctx.save();
+  ctx.globalAlpha = agent.alpha * 0.92;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 6;
+  ctx.fillStyle = scene.tokens.surface;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 6);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.clip();
+  if (image.complete && image.naturalWidth > 0) {
+    const scale = Math.max(w / image.naturalWidth, h / image.naturalHeight);
+    const sourceW = w / scale;
+    const sourceH = h / scale;
+    const sourceX = (image.naturalWidth - sourceW) / 2;
+    const sourceY = (image.naturalHeight - sourceH) / 2;
+    ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, x, y, w, h);
+  } else {
+    ctx.fillStyle = scene.tokens.placeholder;
+    ctx.globalAlpha *= 0.3;
+    ctx.fillRect(x, y, w, h);
+  }
+  ctx.restore();
+
+  ctx.globalAlpha = agent.alpha;
+  ctx.strokeStyle = scene.tokens.rulerLine;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 6);
+  ctx.stroke();
+  drawLabel(ctx, scene, label, x + w / 2, y + h + 6, scene.tokens.brand, scene.tokens.onBrand);
   ctx.globalAlpha = 1;
 }
 
@@ -325,6 +377,7 @@ export function paintScene(ctx: CanvasRenderingContext2D, scene: BuildScene) {
   for (const flash of scene.flashes) drawFlash(ctx, scene, flash);
   for (const agent of scene.agents) {
     if (agent.active && agent.draft) drawSelection(ctx, scene, agent.draft);
+    if (agent.active && agent.dropTarget) drawDropTarget(ctx, scene, agent.dropTarget);
   }
 
   // 눈금자는 화면에 고정되므로 스크롤 이동 없이 그린 뒤, 커서가 눈금자 위로 지나가도록 커서를 마지막에 그림
@@ -332,6 +385,8 @@ export function paintScene(ctx: CanvasRenderingContext2D, scene: BuildScene) {
   drawRulers(ctx, scene);
   ctx.translate(-scrollX, -scrollY);
   for (const agent of scene.agents) {
-    if (agent.active) drawAgent(ctx, scene, agent);
+    if (!agent.active) continue;
+    if (agent.carry) drawCarry(ctx, scene, agent, agent.carry);
+    drawAgent(ctx, scene, agent);
   }
 }
