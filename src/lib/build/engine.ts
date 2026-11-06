@@ -5,6 +5,7 @@ import type {
   BuildScene,
   BuildStatus,
   BuildTokens,
+  Carry,
   Flash,
   GroupItem,
   Guide,
@@ -39,6 +40,7 @@ const RULER_SIZE = 20;
 const MOBILE_RULER_SIZE = 14;
 const OVERLAY_FADE_IN = 300;
 const OVERLAY_FADE_OUT = 800;
+const DROP_SETTLE = 460;
 const SPRING_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
 
 type EngineOptions = {
@@ -71,6 +73,16 @@ function unionLines(lines: TextBox[]): TextBox {
     left: Math.min(...lines.map((line) => line.left)),
     right: Math.max(...lines.map((line) => line.right)),
   };
+}
+
+// 사진 주소에서 썸네일 라벨로 쓸 파일 이름만 꺼냄
+function imageFileName(image: HTMLImageElement) {
+  try {
+    const path = new URL(image.currentSrc || image.src, location.href).pathname;
+    return decodeURIComponent(path.split("/").pop() || "image");
+  } catch {
+    return "image";
+  }
 }
 
 // 요소 기준 좌표를 현재 배율이 적용된 문서 좌표로 변환. growth 가 없으면 배율 없이 변환함
@@ -284,6 +296,8 @@ export class BuildEngine {
       draft: null,
       caret: null,
       chip: null,
+      carry: null,
+      dropTarget: null,
       steps: [],
       stepElapsed: 0,
     }));
@@ -332,6 +346,8 @@ export class BuildEngine {
       agent.draft = null;
       agent.caret = null;
       agent.chip = null;
+      agent.carry = null;
+      agent.dropTarget = null;
     }
     this.flashes = [];
     this.growingTexts.clear();
@@ -636,6 +652,8 @@ export class BuildEngine {
     agent.draft = null;
     agent.caret = null;
     agent.chip = null;
+    agent.carry = null;
+    agent.dropTarget = null;
     if (this.roaming) {
       agent.busy = false;
       agent.steps = this.roamSteps(agent);
@@ -825,6 +843,7 @@ export class BuildEngine {
   private layerSteps(agent: Agent, layer: Layer): Step[] {
     const { rect } = layer;
     if (layer.kind === "text") return this.typeSteps(agent, layer);
+    if (layer.el instanceof HTMLImageElement) return this.dropImageSteps(agent, layer);
 
     const isLarge = rect.w >= 40 && rect.h >= 28;
     const roundsCorner = layer.kind === "frame" && isLarge && layer.radius >= 6 && Math.random() < 0.7;
@@ -856,6 +875,86 @@ export class BuildEngine {
     }
     if (layer.parent && Math.random() < 0.22) this.addMeasure(layer);
     return steps;
+  }
+
+  // 커서가 가까운 화면 바깥으로 나가 사진 썸네일을 들고 들어온 뒤 사진 영역에 놓는 동작 생성
+  private dropImageSteps(agent: Agent, layer: Layer): Step[] {
+    const image = layer.el as HTMLImageElement;
+    const { rect } = layer;
+    const isNarrow = this.width < 768;
+    const w = clamp(rect.w * 0.35, isNarrow ? 80 : 96, isNarrow ? 130 : 180);
+    const h = (w * rect.h) / Math.max(rect.w, 1);
+    const carry: Carry = { image, w, h, offset: { x: -w * 0.3, y: -h * 0.3 }, label: imageFileName(image) };
+
+    const center = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    const viewTop = window.scrollY;
+    const fromLeft = center.x - window.scrollX < this.width / 2;
+    const outside = {
+      x: fromLeft ? window.scrollX - 60 : window.scrollX + this.width + 60,
+      y: clamp(center.y + randomBetween(-80, 80), viewTop + 60, viewTop + this.height - 60),
+    };
+    // 사진이 화면보다 길면 화면 안에 보이는 부분에 놓도록 놓는 위치를 화면 안으로 당김
+    const visibleY = clamp(center.y, viewTop + 80, viewTop + this.height - 80);
+    const drop = { x: center.x, y: clamp(visibleY, rect.y + 10, rect.y + rect.h - 10) };
+    const isInside = (point: Point) =>
+      point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+    const carryIn = this.travel(agent, drop, randomBetween(700, 950));
+
+    return [
+      this.travel(agent, outside, clamp(Math.hypot(outside.x - agent.x, outside.y - agent.y) * 0.45, 260, 620)),
+      {
+        duration: 140,
+        finish: () => {
+          agent.carry = carry;
+          image.setAttribute("data-build-phase", "dragging");
+        },
+      },
+      {
+        duration: carryIn.duration,
+        tick: (progress) => {
+          carryIn.tick?.(progress);
+          agent.dropTarget = isInside(agent) ? rect : null;
+        },
+      },
+      {
+        duration: 180,
+        tick: () => {
+          agent.dropTarget = rect;
+        },
+      },
+      {
+        duration: 0,
+        finish: () => {
+          const thumb = { x: agent.x + carry.offset.x, y: agent.y + carry.offset.y, w: carry.w, h: carry.h };
+          agent.carry = null;
+          agent.dropTarget = null;
+          image.setAttribute("data-build-phase", "dropping");
+          this.revealDroppedImage(layer, thumb);
+        },
+      },
+      { duration: DROP_SETTLE, finish: () => image.removeAttribute("data-build-phase") },
+    ];
+  }
+
+  // 놓은 썸네일의 위치와 크기에서 원래 크기로 튕기며 커지는 효과와 함께 사진 표시
+  private revealDroppedImage(layer: Layer, thumb: Rect) {
+    if (layer.state === "revealed") return;
+    layer.el.removeAttribute("data-build-hidden");
+    this.markRevealed(layer);
+    const { rect } = layer;
+    const scale = thumb.w / Math.max(rect.w, 1);
+    this.play(
+      layer.el,
+      [
+        {
+          transformOrigin: "0 0",
+          transform: `translate(${thumb.x - rect.x}px, ${thumb.y - rect.y}px) scale(${scale})`,
+          opacity: 0.92,
+        },
+        { transformOrigin: "0 0", transform: "translate(0px, 0px) scale(1)", opacity: 1 },
+      ],
+      { duration: DROP_SETTLE, easing: SPRING_EASING },
+    );
   }
 
   // 모서리를 드래그해 둥글게 만드는 동작 생성
