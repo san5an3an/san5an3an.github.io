@@ -21,7 +21,7 @@ export function ProjectSection() {
         <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Projects</h2>
         <p className="text-muted-foreground">직접 설계하고 구현한 프로젝트입니다.</p>
       </div>
-      <div data-autolayout className="grid gap-4 md:grid-cols-3">
+      <div data-autolayout className="grid gap-4 md:grid-cols-2">
         {projects.map((project) => (
           <Card key={project.slug} className="min-w-0">
             <CardHeader>

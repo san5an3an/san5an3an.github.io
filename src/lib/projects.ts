@@ -35,6 +35,240 @@ export type Project = {
 // 프로젝트 카드와 상세 화면에 표시할 내용 지정
 export const projects: Project[] = [
   {
+    slug: "cbm-monitoring",
+    name: "CBM 모니터링 시스템",
+    platform: "Web",
+    summary:
+      "서울교통공사 4호선 전동차 260칸의 장치 이상을 AI 모델로 감지하고, 모델 학습과 추론을 관리하는 모니터링 시스템의 웹 화면이에요.",
+    lead: [
+      "서울교통공사 4호선 전동차 260칸의 장치 이상을 AI 모델로 감지하고, 모델 학습과 추론을 관리하는 모니터링 시스템의 웹 화면이에요.",
+      "화면 11개와 로그인을 만들었고, 데이터는 Mock 이라 실제 API 없이 동작해요. 백엔드가 붙일 연결 함수 84개와 반환 타입을 미리 정해 두었어요.",
+    ],
+    stack: ["Next.js 16", "React 19", "TypeScript", "Tailwind CSS 4", "shadcn/ui", "MUI", "Recharts", "Playwright"],
+    repoUrl: "https://github.com/san5an3an/cbm260-aibase-ml-web-react",
+    facts: [
+      { label: "화면", value: "11개와 로그인" },
+      { label: "연결 함수", value: "84개" },
+      { label: "E2E 테스트", value: "546개" },
+      { label: "데이터", value: "Mock" },
+    ],
+    screens: [
+      {
+        src: "/screens/cbm/fleet.webp",
+        alt: "총 추론 건수와 위험 장치 랭킹, 모델 커버리지를 보여주는 플릿 개요 화면",
+        caption: "플릿 개요",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/cbm/anomaly-history.webp",
+        alt: "장치별 이상 현황 히트맵과 날짜별 상세를 보여주는 이상 감지 내역 화면",
+        caption: "이상 감지 내역",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/cbm/threshold-tuning.webp",
+        alt: "임계값에 따른 이상 비율 분포와 백분위 조정 막대를 보여주는 임계 튜닝 화면",
+        caption: "임계 튜닝",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/cbm/model-diagnostics.webp",
+        alt: "학습 곡선과 원인 분석 리포트를 보여주는 모델 진단 화면",
+        caption: "모델 진단",
+        width: 2880,
+        height: 1800,
+      },
+    ],
+    screensNote: "화면의 값은 예시이며, 실제와는 다를 수 있습니다.",
+    sections: [
+      {
+        id: "features",
+        title: "주요 화면",
+        blocks: [
+          {
+            kind: "cards",
+            items: [
+              {
+                title: "CBM 대시보드",
+                detail: "플릿 개요, 이상 타임라인, 알람/이벤트, 조치 관리 화면에서 위험 장치와 알람을 확인하고 조치를 기록해요",
+              },
+              {
+                title: "CBM 정보",
+                detail: "재학습 설정, 추론, 이상 감지 내역 화면에서 장치별 모델 학습과 추론을 실행하고 결과를 확인해요",
+              },
+              {
+                title: "CBM 모델",
+                detail: "모델 커스텀, 모델 비교, 임계 튜닝, 모델 진단 화면에서 모델 설정과 임계치를 조정하고 모델을 비교해요",
+              },
+              {
+                title: "공통 화면",
+                detail: "로그인, 세션 만료 경고, 장치 고장 알림, 다크 모드를 모든 화면에 공통으로 적용했어요",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "architecture",
+        title: "구조",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "화면은 `src/services` 의 연결 함수로만 데이터를 받아요. 지금은 이 함수들이 Mock 데이터를 돌려주고, 백엔드를 붙일 때는 함수 몸체만 실제 요청으로 바꾸면 화면 코드는 그대로 둘 수 있어요.",
+              "반환 타입과 계산 함수는 `src/domain` 에 모으고, 서버 코드를 화면에 보여줄 이름과 색으로 바꾸는 규칙은 `src/domain/labels` 에 따로 두었어요.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "quality",
+        title: "검사",
+        blocks: [
+          {
+            kind: "bullets",
+            items: [
+              "Playwright E2E 테스트 40개 파일, 546개로 화면마다 동작을 확인해요",
+              "ESLint 규칙으로 다른 폴더는 `@/` 경로로만 import 하고, 길이는 px 대신 rem 으로 쓰게 했어요",
+              "화면 계층은 `src/domain` 과 `src/config` 에서 타입과 표시 규칙만 가져오고, 데이터는 props 로 받게 막았어요",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "minari-design-storybook",
+    name: "minari-design-storybook",
+    platform: "Design System",
+    summary:
+      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
+    lead: [
+      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여, 구현 방식과 디자인 토큰의 적용 범위를 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
+    ],
+    stack: ["React", "TypeScript", "shadcn/ui", "Next.js", "Playwright"],
+    repoUrl: "https://github.com/san5an3an/minari-design-storybook",
+    facts: [
+      { label: "디자인 시스템", value: "20종" },
+      { label: "컴포넌트 계약", value: "74종" },
+      { label: "UI 라이브러리", value: "18종 이상" },
+    ],
+    screens: [
+      {
+        src: "/screens/minari/usage-shadcn-cobalt.webp",
+        alt: "shadcn/ui 와 Cobalt 디자인 시스템을 조합한 Usage 대시보드 화면",
+        caption: "shadcn/ui + Cobalt, Usage 대시보드",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/minari/usage-mui-plum.webp",
+        alt: "MUI 와 Plum 디자인 시스템을 조합한 Usage 화면",
+        caption: "MUI + Plum, Usage 화면",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/minari/usage-antd-ember.webp",
+        alt: "Ant Design 과 Ember 디자인 시스템을 조합한 Usage 화면",
+        caption: "Ant Design + Ember, Usage 화면",
+        width: 2880,
+        height: 1800,
+      },
+      {
+        src: "/screens/minari/catalog-button.webp",
+        alt: "Cobalt 디자인 시스템의 Button 컴포넌트 카탈로그 화면",
+        caption: "Cobalt, Button 컴포넌트 카탈로그",
+        width: 2880,
+        height: 1800,
+      },
+    ],
+    sections: [
+      {
+        id: "overview",
+        title: "무엇을 만든 건가",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "`01-cobalt`부터 `20-berry`까지 총 20종의 디자인 시스템을 설계했습니다.",
+              "하나의 디자인 시스템에 테마만 변경하는 방식이 아니라, 각 시스템이 독립적인 컬러 체계, Radius, 간격, 컴포넌트 표현 방식과 시각적 특성을 갖도록 구성했습니다. 시스템 간에 디자인 토큰 값을 공유하지 않으며, 공통으로 적용되는 것은 품질 및 설계 규칙입니다.",
+              "또한 동일한 컴포넌트 계약 74종을 shadcn/ui, MUI, Ant Design, Chakra UI, Mantine, Fluent UI, Carbon, Blueprint, Bootstrap, daisyUI, Flowbite, Grommet, HeroUI, Cloudscape, PrimeReact, Primer, Spectrum, Lightning 등 다양한 UI 라이브러리에 적용했습니다.",
+              "이를 통해 동일한 디자인 토큰과 컴포넌트 규격이 각 UI 라이브러리에서 어떻게 표현되고, 어느 범위까지 적용되는지 직접 비교할 수 있습니다.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "features",
+        title: "주요 화면 및 기능",
+        blocks: [
+          {
+            kind: "cards",
+            items: [
+              {
+                title: "컴포넌트 카탈로그",
+                detail:
+                  "74종의 공통 컴포넌트를 디자인 시스템 × UI 라이브러리 조합으로 렌더링하여 비교합니다. 컴포넌트 속성 정보는 수동으로 작성하지 않고 설치된 패키지의 타입 정의를 기반으로 추출합니다.",
+              },
+              {
+                title: "라이브러리 예제 비교",
+                detail: "각 UI 라이브러리의 컴포넌트 및 예제를 동일한 환경에서 확인하고 비교할 수 있습니다.",
+              },
+              {
+                title: "Usage 대시보드",
+                detail:
+                  "UI 라이브러리별로 서로 다른 성격의 제품 화면을 구성하여 디자인 토큰과 컴포넌트가 실제 화면에서 어떻게 조합되는지 확인합니다.",
+              },
+              {
+                title: "디자인 시스템 내보내기",
+                detail: "선택한 디자인 시스템의 토큰, 테마 및 컴포넌트를 하나의 묶음으로 내보낼 수 있습니다.",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "scope",
+        title: "이 프로젝트에서 설계·구현한 영역",
+        blocks: [
+          {
+            kind: "bullets",
+            items: [
+              "서로 독립된 20종 디자인 시스템의 토큰 체계 및 설계 규칙",
+              "다양한 UI 라이브러리를 하나의 컴포넌트 계약 74종으로 연결하는 추상화 계층",
+              "공통 컴포넌트 계약을 각 UI 라이브러리에 연결하는 어댑터",
+              "디자인 토큰을 라이브러리별 테마 체계로 변환하는 테마 번역 구조",
+              "디자인 시스템 × UI 라이브러리 조합을 탐색할 수 있는 컴포넌트 카탈로그",
+              "설치된 패키지의 타입 정의를 기반으로 컴포넌트 속성 정보를 추출하는 기능",
+              "UI 라이브러리 전환, 검색 및 내비게이션을 포함한 미리보기 환경",
+              "디자인 토큰, 테마 및 컴포넌트를 묶어 내보내는 기능",
+              "HTML에서 컴포넌트 후보를 추출하는 가져오기 기능",
+              "디자인 시스템과 UI 라이브러리의 실제 적용을 확인하기 위한 Usage 제품 화면",
+            ],
+          },
+        ],
+      },
+      {
+        id: "nature",
+        title: "프로젝트 성격",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "본 repository는 포트폴리오 및 기술 시연을 목적으로 구성된 프로젝트입니다.",
+              "각 UI 라이브러리가 제공하는 컴포넌트 자체를 직접 구현한 것이 아니라, 각 라이브러리의 기존 컴포넌트를 공통 계약에 연결하고 디자인 토큰을 적용하기 위한 추상화 계층, 어댑터 및 테마 변환 구조를 설계·구현했습니다.",
+              "본 프로젝트는 명시된 UI 라이브러리 및 제공자와 공식적인 제휴·후원·인증 관계가 없습니다. 라이브러리 및 제품명은 프로젝트에서 사용한 기술과 출처를 명확하게 표시하기 위한 목적으로만 사용합니다.",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "we-on",
     name: "WE-ON",
     platform: "iOS",
@@ -270,134 +504,6 @@ export const projects: Project[] = [
               "설계와 구현에 제가 구축한 AI 하네스를 함께 사용했어요.",
               "어떤 기술을 쓸지, 화면을 어떻게 구성할지, 서버를 어디에 둘지 같은 결정은 직접 내렸고, 결과물은 테스트와 시뮬레이터로 확인하면서 다듬었어요.",
               "앱 코드도 직접 작성했어요. 다시 불러올 때 로딩이 보이지 않던 화면들의 상태 조건, 가계부 요약이 불러오기 전에 0원으로 보이던 문제, 카카오맵 연결(`KakaoMapView`, SDK 초기화, 가게 위치 마커)을 직접 고치고 만들었어요.",
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    slug: "minari-design-storybook",
-    name: "minari-design-storybook",
-    platform: "Design System",
-    summary:
-      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
-    lead: [
-      "서로 독립적으로 설계된 20종의 디자인 시스템과 동일한 컴포넌트 규격을 다양한 UI 라이브러리에 적용하여, 구현 방식과 디자인 토큰의 적용 범위를 한 화면에서 비교할 수 있도록 구성한 프로젝트입니다.",
-    ],
-    stack: ["React", "TypeScript", "shadcn/ui", "Next.js", "Playwright"],
-    repoUrl: "https://github.com/san5an3an/minari-design-storybook",
-    facts: [
-      { label: "디자인 시스템", value: "20종" },
-      { label: "컴포넌트 계약", value: "74종" },
-      { label: "UI 라이브러리", value: "18종 이상" },
-    ],
-    screens: [
-      {
-        src: "/screens/minari/usage-shadcn-cobalt.webp",
-        alt: "shadcn/ui 와 Cobalt 디자인 시스템을 조합한 Usage 대시보드 화면",
-        caption: "shadcn/ui + Cobalt, Usage 대시보드",
-        width: 2880,
-        height: 1800,
-      },
-      {
-        src: "/screens/minari/usage-mui-plum.webp",
-        alt: "MUI 와 Plum 디자인 시스템을 조합한 Usage 화면",
-        caption: "MUI + Plum, Usage 화면",
-        width: 2880,
-        height: 1800,
-      },
-      {
-        src: "/screens/minari/usage-antd-ember.webp",
-        alt: "Ant Design 과 Ember 디자인 시스템을 조합한 Usage 화면",
-        caption: "Ant Design + Ember, Usage 화면",
-        width: 2880,
-        height: 1800,
-      },
-      {
-        src: "/screens/minari/catalog-button.webp",
-        alt: "Cobalt 디자인 시스템의 Button 컴포넌트 카탈로그 화면",
-        caption: "Cobalt, Button 컴포넌트 카탈로그",
-        width: 2880,
-        height: 1800,
-      },
-    ],
-    sections: [
-      {
-        id: "overview",
-        title: "무엇을 만든 건가",
-        blocks: [
-          {
-            kind: "text",
-            paragraphs: [
-              "`01-cobalt`부터 `20-berry`까지 총 20종의 디자인 시스템을 설계했습니다.",
-              "하나의 디자인 시스템에 테마만 변경하는 방식이 아니라, 각 시스템이 독립적인 컬러 체계, Radius, 간격, 컴포넌트 표현 방식과 시각적 특성을 갖도록 구성했습니다. 시스템 간에 디자인 토큰 값을 공유하지 않으며, 공통으로 적용되는 것은 품질 및 설계 규칙입니다.",
-              "또한 동일한 컴포넌트 계약 74종을 shadcn/ui, MUI, Ant Design, Chakra UI, Mantine, Fluent UI, Carbon, Blueprint, Bootstrap, daisyUI, Flowbite, Grommet, HeroUI, Cloudscape, PrimeReact, Primer, Spectrum, Lightning 등 다양한 UI 라이브러리에 적용했습니다.",
-              "이를 통해 동일한 디자인 토큰과 컴포넌트 규격이 각 UI 라이브러리에서 어떻게 표현되고, 어느 범위까지 적용되는지 직접 비교할 수 있습니다.",
-            ],
-          },
-        ],
-      },
-      {
-        id: "features",
-        title: "주요 화면 및 기능",
-        blocks: [
-          {
-            kind: "cards",
-            items: [
-              {
-                title: "컴포넌트 카탈로그",
-                detail:
-                  "74종의 공통 컴포넌트를 디자인 시스템 × UI 라이브러리 조합으로 렌더링하여 비교합니다. 컴포넌트 속성 정보는 수동으로 작성하지 않고 설치된 패키지의 타입 정의를 기반으로 추출합니다.",
-              },
-              {
-                title: "라이브러리 예제 비교",
-                detail: "각 UI 라이브러리의 컴포넌트 및 예제를 동일한 환경에서 확인하고 비교할 수 있습니다.",
-              },
-              {
-                title: "Usage 대시보드",
-                detail:
-                  "UI 라이브러리별로 서로 다른 성격의 제품 화면을 구성하여 디자인 토큰과 컴포넌트가 실제 화면에서 어떻게 조합되는지 확인합니다.",
-              },
-              {
-                title: "디자인 시스템 내보내기",
-                detail: "선택한 디자인 시스템의 토큰, 테마 및 컴포넌트를 하나의 묶음으로 내보낼 수 있습니다.",
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: "scope",
-        title: "이 프로젝트에서 설계·구현한 영역",
-        blocks: [
-          {
-            kind: "bullets",
-            items: [
-              "서로 독립된 20종 디자인 시스템의 토큰 체계 및 설계 규칙",
-              "다양한 UI 라이브러리를 하나의 컴포넌트 계약 74종으로 연결하는 추상화 계층",
-              "공통 컴포넌트 계약을 각 UI 라이브러리에 연결하는 어댑터",
-              "디자인 토큰을 라이브러리별 테마 체계로 변환하는 테마 번역 구조",
-              "디자인 시스템 × UI 라이브러리 조합을 탐색할 수 있는 컴포넌트 카탈로그",
-              "설치된 패키지의 타입 정의를 기반으로 컴포넌트 속성 정보를 추출하는 기능",
-              "UI 라이브러리 전환, 검색 및 내비게이션을 포함한 미리보기 환경",
-              "디자인 토큰, 테마 및 컴포넌트를 묶어 내보내는 기능",
-              "HTML에서 컴포넌트 후보를 추출하는 가져오기 기능",
-              "디자인 시스템과 UI 라이브러리의 실제 적용을 확인하기 위한 Usage 제품 화면",
-            ],
-          },
-        ],
-      },
-      {
-        id: "nature",
-        title: "프로젝트 성격",
-        blocks: [
-          {
-            kind: "text",
-            paragraphs: [
-              "본 repository는 포트폴리오 및 기술 시연을 목적으로 구성된 프로젝트입니다.",
-              "각 UI 라이브러리가 제공하는 컴포넌트 자체를 직접 구현한 것이 아니라, 각 라이브러리의 기존 컴포넌트를 공통 계약에 연결하고 디자인 토큰을 적용하기 위한 추상화 계층, 어댑터 및 테마 변환 구조를 설계·구현했습니다.",
-              "본 프로젝트는 명시된 UI 라이브러리 및 제공자와 공식적인 제휴·후원·인증 관계가 없습니다. 라이브러리 및 제품명은 프로젝트에서 사용한 기술과 출처를 명확하게 표시하기 위한 목적으로만 사용합니다.",
             ],
           },
         ],
