@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const PAGES = ["/", "/projects/we-on/", "/projects/minari-design-storybook/", "/projects/greeon/"];
+const PAGES = ["/", "/projects/cbm-monitoring/", "/projects/minari-design-storybook/", "/projects/we-on/", "/projects/greeon/"];
 
 test.describe("사이트 글꼴", () => {
   for (const pathname of PAGES) {
