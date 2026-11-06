@@ -56,7 +56,8 @@ test.describe("조립 애니메이션 재생", () => {
       const box = document.querySelector('#projects [data-slot="card"]')?.getBoundingClientRect();
       if (box) window.scrollTo(0, box.bottom + window.scrollY + 30);
     });
-    await expect(card).not.toHaveAttribute("data-build-hidden", { timeout: 3000 });
+    // 가이드를 먼저 놓은 뒤 카드 작업을 시작하므로 그 시간까지 기다림
+    await expect(card).not.toHaveAttribute("data-build-hidden", { timeout: 6000 });
   });
 
   test("조립 도중 스크롤을 맨 위로 되돌려도 상단 메뉴를 완성함", async ({ page }) => {
@@ -79,6 +80,120 @@ test.describe("조립 애니메이션 재생", () => {
       document.querySelector("#skills")?.scrollIntoView();
     });
     await expect(page.locator("#top h1 span").first()).not.toHaveAttribute("data-build-hidden");
+  });
+});
+
+test.describe("큰 글자 크기 키우기", () => {
+  // 지정한 요소의 조립 단계 변화와 그 순간의 배율 적용 여부를 기록하고 요소를 화면으로 이동
+  function recordSizing(page: Page, selector: string) {
+    return page.evaluateHandle((target) => {
+      const element = document.querySelector<HTMLElement>(target);
+      const history: string[] = [];
+      if (!element) return history;
+      new MutationObserver(() => {
+        const size = element.style.transform.startsWith("scale(") ? "small" : "full";
+        history.push(`${element.getAttribute("data-build-phase")}:${size}`);
+      }).observe(element, { attributes: true, attributeFilter: ["data-build-phase"] });
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+      return history;
+    }, selector);
+  }
+
+  test("큰 제목은 작은 크기로 입력한 뒤 원래 크기까지 키우고 흔적 없이 끝남", async ({ page }) => {
+    await page.goto("/");
+    await expect(statusBar(page)).toBeVisible();
+    const history = await recordSizing(page, "#projects h2");
+
+    await expect
+      .poll(() => history.evaluate((items) => [...items]), { timeout: 15000 })
+      .toEqual(["typing:small", "sizing:small", "null:full"]);
+
+    const heading = page.locator("#projects h2");
+    await expect(heading).not.toHaveAttribute("data-build-hidden");
+    expect(await heading.evaluate((element) => (element as HTMLElement).style.cssText)).toBe("");
+  });
+
+  test("본문 문단은 크기를 바꾸지 않고 입력만 함", async ({ page }) => {
+    await page.goto("/");
+    await expect(statusBar(page)).toBeVisible();
+    const history = await recordSizing(page, "#projects p");
+
+    await expect
+      .poll(() => history.evaluate((items) => [...items]), { timeout: 15000 })
+      .toEqual(["typing:full", "null:full"]);
+  });
+
+  test("글자를 키우는 도중 건너뛰어도 배율과 단계 표시가 남지 않음", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("#top [data-build-phase='sizing']").first()).toBeAttached({ timeout: 15000 });
+    await skipButton(page).click();
+
+    await expect(page.locator("[data-build-phase]")).toHaveCount(0);
+    await expect(hiddenElements(page)).toHaveCount(0);
+    const scaled = await page
+      .locator("h1 span, h2")
+      .evaluateAll((elements) => elements.filter((element) => (element as HTMLElement).style.transform).length);
+    expect(scaled).toBe(0);
+  });
+});
+
+test.describe("눈금자와 가이드", () => {
+  test("조립을 시작하면 가이드 3개를 먼저 놓은 뒤 요소 작업을 시작함", async ({ page }) => {
+    // 페이지 스크립트보다 먼저 감시를 붙여 가이드가 다 놓인 순간의 완성 레이어 수를 기록
+    await page.addInitScript(() => {
+      new MutationObserver((records, observer) => {
+        const canvas = records[0].target as Element;
+        if (canvas.getAttribute("data-build-guides") !== "3") return;
+        observer.disconnect();
+        const text = document.querySelector("[data-testid='build-layers']")?.textContent ?? "";
+        (window as unknown as { doneAtGuides: number }).doneAtGuides = Number(text.split("/")[0].trim());
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-build-guides"] });
+    });
+    await page.goto("/");
+
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { doneAtGuides?: number }).doneAtGuides), { timeout: 8000 })
+      .toBe(0);
+    await expect.poll(() => readDoneLayers(page), { timeout: 8000 }).toBeGreaterThan(0);
+  });
+
+  test("화면 안 작업이 끝나 스크롤 안내가 뜨면 눈금자와 가이드를 숨기고 스크롤해 조립이 다시 시작되면 다시 표시함", async ({ page }) => {
+    await page.goto("/");
+    await expect(canvas(page)).toHaveAttribute("data-build-overlay", "shown", { timeout: 8000 });
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "3", { timeout: 8000 });
+    await expect(statusBar(page).getByText("스크롤")).toBeVisible({ timeout: 15000 });
+
+    await expect(canvas(page)).toHaveAttribute("data-build-overlay", "hidden", { timeout: 3000 });
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "3");
+
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = "auto";
+      document.querySelector("#projects")?.scrollIntoView();
+    });
+    await expect(canvas(page)).toHaveAttribute("data-build-overlay", "shown", { timeout: 3000 });
+  });
+
+  test("건너뛰면 놓은 가이드가 서서히 사라진 뒤 모두 지워짐", async ({ page }) => {
+    await page.goto("/");
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "3", { timeout: 8000 });
+    await skipButton(page).click();
+
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "0", { timeout: 3000 });
+    await expect(canvas(page)).toHaveAttribute("data-build-overlay", "hidden");
+    await expectFinishedPage(page);
+  });
+
+  test("페이지 끝까지 조립을 마치면 가이드를 지우고 완성 화면만 남김", async ({ page }) => {
+    await page.goto("/");
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "3", { timeout: 8000 });
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = "auto";
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+
+    await expectFinishedPage(page, 20000);
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "0", { timeout: 3000 });
   });
 });
 
