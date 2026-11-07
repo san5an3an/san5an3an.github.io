@@ -36,7 +36,20 @@ export type LayoutGroup = {
   state: "open" | "applying" | "applied";
 };
 
-export type Draft = { rect: Rect; filled: boolean };
+export type Draft = { rect: Rect; filled: boolean; hideSize?: boolean };
+
+// 커서가 화면 밖에서 끌고 오는 사진 썸네일 정보. offset 은 커서 끝에서 썸네일 왼쪽 위까지의 거리
+export type Carry = { image: HTMLImageElement; w: number; h: number; offset: Point; label: string };
+
+// 눈금자에서 끌어내 놓는 정렬 기준선 하나의 정보. axis 가 x 면 세로선, y 면 가로선
+export type Guide = {
+  axis: "x" | "y";
+  target: number;
+  position: number | null;
+  label: Point | null;
+  claimed: boolean;
+  placed: boolean;
+};
 export type Caret = { x: number; y: number; height: number };
 
 // 시간이 지나면 사라지는 보조 표시
@@ -70,6 +83,9 @@ export type Agent = {
   tool: "arrow" | "text";
   draft: Draft | null;
   caret: Caret | null;
+  chip: string | null;
+  carry: Carry | null;
+  dropTarget: Rect | null;
   steps: Step[];
   stepElapsed: number;
 };
@@ -81,6 +97,8 @@ export type BuildTokens = {
   onDanger: string;
   placeholder: string;
   surface: string;
+  rulerLine: string;
+  rulerText: string;
   fontFamily: string;
 };
 
@@ -93,6 +111,9 @@ export type BuildScene = {
   agents: Agent[];
   groups: LayoutGroup[];
   flashes: Flash[];
+  guides: Guide[];
+  rulerSize: number;
+  overlayAlpha: number;
   tokens: BuildTokens;
 };
 

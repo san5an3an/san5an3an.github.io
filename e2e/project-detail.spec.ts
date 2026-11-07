@@ -653,6 +653,77 @@ test.describe("상세 화면 표 조립 순서", () => {
   });
 });
 
+test.describe("상세 화면 사진 끌어다 놓기", () => {
+  const firstScreen = "[data-testid='project-screens'] img";
+
+  // 첫 사진의 조립 단계 변화와 그 순간의 숨김 여부를 기록하고 사진을 화면으로 이동
+  function recordDrop(page: Page) {
+    return page.evaluateHandle((target) => {
+      const element = document.querySelector(target);
+      const history: string[] = [];
+      if (!element) return history;
+      new MutationObserver(() => {
+        const hidden = element.hasAttribute("data-build-hidden") ? "hidden" : "visible";
+        history.push(`${element.getAttribute("data-build-phase")}:${hidden}`);
+      }).observe(element, { attributes: true, attributeFilter: ["data-build-phase"] });
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+      return history;
+    }, firstScreen);
+  }
+
+  test("사진은 숨긴 채 화면 밖에서 끌고 온 뒤 놓으면서 표시하고 흔적 없이 끝남", async ({ page }) => {
+    await page.goto("/projects/cbm-monitoring/");
+    await expect(statusBar(page)).toBeVisible();
+    const history = await recordDrop(page);
+
+    await expect
+      .poll(() => history.evaluate((items) => [...items]), { timeout: 20000 })
+      .toEqual(["dragging:hidden", "dropping:visible", "null:visible"]);
+
+    const image = page.locator(firstScreen).first();
+    expect(await image.evaluate((element) => (element as HTMLElement).style.transform)).toBe("");
+    expect(await image.evaluate((element) => element.getAnimations().length)).toBe(0);
+  });
+
+  test("사진을 끌고 오는 도중 건너뛰어도 단계 표시와 숨김이 남지 않음", async ({ page }) => {
+    await page.goto("/projects/cbm-monitoring/");
+    await expect(statusBar(page)).toBeVisible();
+    await recordDrop(page);
+    await expect(page.locator(`${firstScreen}[data-build-phase='dragging']`).first()).toBeAttached({ timeout: 20000 });
+    await skipButton(page).click();
+
+    await expect(page.locator("[data-build-phase]")).toHaveCount(0);
+    await expect(hiddenElements(page)).toHaveCount(0);
+  });
+
+  test("아이콘은 끌어다 놓지 않고 그리는 방식을 유지함", async ({ page }) => {
+    // 상세 화면 끝까지 조립을 기다리므로 기본 제한 시간보다 길게 잡음
+    test.setTimeout(60000);
+    await page.addInitScript(() => {
+      const phases: string[] = [];
+      (window as unknown as { iconPhases: string[] }).iconPhases = phases;
+      new MutationObserver((records) => {
+        for (const record of records) {
+          const target = record.target as Element;
+          if (target.tagName.toLowerCase() === "svg" && target.hasAttribute("data-build-phase")) {
+            phases.push(target.getAttribute("data-build-phase") ?? "");
+          }
+        }
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-build-phase"] });
+    });
+    await page.goto("/projects/cbm-monitoring/");
+    await expect(statusBar(page)).toBeVisible();
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = "auto";
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+
+    await expect(replayButton(page)).toBeVisible({ timeout: 45000 });
+    expect(await page.evaluate(() => (window as unknown as { iconPhases: string[] }).iconPhases)).toEqual([]);
+  });
+});
+
 test.describe("프로젝트 상세 화면 접근성과 대체 화면", () => {
   for (const slug of SLUGS) {
     test(`자바스크립트가 꺼져 있어도 ${slug} 상세 화면의 제목과 내용을 표시함`, async ({ browser }) => {
