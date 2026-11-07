@@ -5,8 +5,10 @@ import type {
   BuildScene,
   BuildStatus,
   BuildTokens,
+  Carry,
   Flash,
   GroupItem,
+  Guide,
   Layer,
   LayoutGroup,
   Point,
@@ -31,6 +33,14 @@ const VIEW_BOTTOM_RATIO = 0.96;
 const FRAMED_TEXT_MIN_DRAG = 280;
 const FRAMED_TEXT_PLACEHOLDER_HOLD = 110;
 const FRAMED_TEXT_CARET_MOVE = 140;
+const GROW_MIN_FONT_SIZE = 20;
+const GROW_START_FONT_SIZE = 12;
+const GROW_MS_PER_PX = 16;
+const RULER_SIZE = 20;
+const MOBILE_RULER_SIZE = 14;
+const OVERLAY_FADE_IN = 300;
+const OVERLAY_FADE_OUT = 800;
+const DROP_SETTLE = 460;
 const SPRING_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
 
 type EngineOptions = {
@@ -39,8 +49,50 @@ type EngineOptions = {
   onStatus: (status: BuildStatus) => void;
 };
 
+type TextBox = { top: number; bottom: number; left: number; right: number };
+
+// 작은 크기로 입력한 뒤 키우는 큰 글자의 기준점과 크기 정보
+type TextGrowth = {
+  fontSize: number;
+  startScale: number;
+  origin: Point;
+  box: TextBox;
+};
+
+type InlineStyles = { clipPath: string; borderRadius: string; transform: string; transformOrigin: string };
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+// 줄별 글자 영역을 모두 감싸는 영역 계산
+function unionLines(lines: TextBox[]): TextBox {
+  return {
+    top: Math.min(...lines.map((line) => line.top)),
+    bottom: Math.max(...lines.map((line) => line.bottom)),
+    left: Math.min(...lines.map((line) => line.left)),
+    right: Math.max(...lines.map((line) => line.right)),
+  };
+}
+
+// 사진 주소에서 썸네일 라벨로 쓸 파일 이름만 꺼냄
+function imageFileName(image: HTMLImageElement) {
+  try {
+    const path = new URL(image.currentSrc || image.src, location.href).pathname;
+    return decodeURIComponent(path.split("/").pop() || "image");
+  } catch {
+    return "image";
+  }
+}
+
+// 요소 기준 좌표를 현재 배율이 적용된 문서 좌표로 변환. growth 가 없으면 배율 없이 변환함
+function textPoint(layer: Layer, growth: TextGrowth | null, scale: number, x: number, y: number): Point {
+  if (!growth) return { x: layer.rect.x + x, y: layer.rect.y + y };
+  const { origin } = growth;
+  return {
+    x: layer.rect.x + origin.x + (x - origin.x) * scale,
+    y: layer.rect.y + origin.y + (y - origin.y) * scale,
+  };
 }
 
 function easeInOut(value: number) {
@@ -63,6 +115,8 @@ function readTokens(): { tokens: BuildTokens; palette: { color: string; onColor:
       onDanger: read("--semantic-fg-on-danger-default"),
       placeholder: read("--semantic-bg-neutral-default"),
       surface: read("--semantic-bg-neutral-surface"),
+      rulerLine: read("--semantic-border-neutral-default"),
+      rulerText: read("--semantic-fg-neutral-subtlest"),
       fontFamily: getComputedStyle(document.body).fontFamily,
     },
     palette: [
@@ -83,8 +137,12 @@ export class BuildEngine {
   private groups: LayoutGroup[] = [];
   private agents: Agent[] = [];
   private flashes: Flash[] = [];
+  private guides: Guide[] = [];
+  private overlayAlpha = 0;
+  private rulerSize = RULER_SIZE;
   private animations = new Set<Animation>();
-  private savedInlineStyles = new Map<HTMLElement | SVGElement, { clipPath: string; borderRadius: string }>();
+  private savedInlineStyles = new Map<HTMLElement | SVGElement, InlineStyles>();
+  private growingTexts = new Set<Element>();
   private tokens: BuildTokens = {
     brand: "",
     onBrand: "",
@@ -92,6 +150,8 @@ export class BuildEngine {
     onDanger: "",
     placeholder: "",
     surface: "",
+    rulerLine: "",
+    rulerText: "",
     fontFamily: "",
   };
   private frameHandle = 0;
@@ -117,6 +177,8 @@ export class BuildEngine {
     const context = options.canvas.getContext("2d");
     if (!context) throw new Error("Canvas 2D context is not available");
     this.context = context;
+    this.updateGuideCount();
+    this.updateOverlayState();
   }
 
   // 요소를 숨기고 커서를 준비한 뒤 재생 시작
@@ -195,6 +257,10 @@ export class BuildEngine {
 
     this.prepareScene();
 
+    this.guides = this.collectGuides();
+    this.overlayAlpha = 0;
+    this.updateGuideCount();
+    this.updateOverlayState();
     this.flashes = [];
     this.elapsed = 0;
     this.idleTime = 0;
@@ -212,6 +278,7 @@ export class BuildEngine {
   private prepareScene() {
     this.resizeCanvas();
     this.layoutWidth = window.innerWidth;
+    this.rulerSize = window.innerWidth < 768 ? MOBILE_RULER_SIZE : RULER_SIZE;
     const { tokens, palette } = readTokens();
     this.tokens = tokens;
 
@@ -228,6 +295,9 @@ export class BuildEngine {
       tool: "arrow",
       draft: null,
       caret: null,
+      chip: null,
+      carry: null,
+      dropTarget: null,
       steps: [],
       stepElapsed: 0,
     }));
@@ -275,16 +345,65 @@ export class BuildEngine {
       agent.steps = [];
       agent.draft = null;
       agent.caret = null;
+      agent.chip = null;
+      agent.carry = null;
+      agent.dropTarget = null;
     }
     this.flashes = [];
+    this.growingTexts.clear();
+    // 놓은 가이드만 남겨 완성 화면 위에서 서서히 사라지게 함
+    this.guides = this.guides.filter((guide) => guide.placed);
+    for (const guide of this.guides) guide.label = null;
     delete document.documentElement.dataset.build;
     this.clearCanvas();
   }
 
+  // 시험과 확인을 위해 지금 보이는 놓인 가이드 수를 Canvas 에 표시
+  private updateGuideCount() {
+    this.options.canvas.dataset.buildGuides = `${this.guides.filter((guide) => guide.placed).length}`;
+  }
+
+  // 첫 제목을 감싼 폭 제한 컨테이너의 본문 왼쪽, 오른쪽 경계와 제목 위쪽에 놓을 가이드 생성
+  private collectGuides(): Guide[] {
+    const targets = this.measureGuideTargets();
+    if (!targets) return [];
+    return targets.map(({ axis, target }) => ({ axis, target, position: null, label: null, claimed: false, placed: false }));
+  }
+
+  private measureGuideTargets(): { axis: Guide["axis"]; target: number }[] | null {
+    const heading = this.options.root.querySelector("h1");
+    if (!heading) return null;
+    const lines = measureTextLines(heading);
+    const targets: { axis: Guide["axis"]; target: number }[] = [];
+    let container = heading.parentElement;
+    while (container && container !== this.options.root && getComputedStyle(container).maxWidth === "none") {
+      container = container.parentElement;
+    }
+    if (container && container !== this.options.root) {
+      const style = getComputedStyle(container);
+      const rect = readRect(container);
+      targets.push({ axis: "x", target: rect.x + parseFloat(style.paddingLeft) });
+      targets.push({ axis: "x", target: rect.x + rect.w - parseFloat(style.paddingRight) });
+    }
+    targets.push({ axis: "y", target: readRect(heading).y + lines[0].top });
+    return targets;
+  }
+
+  // 글꼴 적용 뒤 바뀐 위치로 가이드를 옮김
+  private remeasureGuides() {
+    const targets = this.measureGuideTargets();
+    if (!targets || targets.length !== this.guides.length) return;
+    this.guides.forEach((guide, index) => {
+      guide.target = targets[index].target;
+      if (guide.placed) guide.position = guide.target;
+    });
+  }
+
   // 효과용 스타일을 적용하기 전에 요소에 직접 지정된 값 저장
-  private overrideInlineStyle(el: HTMLElement | SVGElement, styles: { clipPath?: string; borderRadius?: string }) {
+  private overrideInlineStyle(el: HTMLElement | SVGElement, styles: Partial<InlineStyles>) {
     if (!this.savedInlineStyles.has(el)) {
-      this.savedInlineStyles.set(el, { clipPath: el.style.clipPath, borderRadius: el.style.borderRadius });
+      const { clipPath, borderRadius, transform, transformOrigin } = el.style;
+      this.savedInlineStyles.set(el, { clipPath, borderRadius, transform, transformOrigin });
     }
     Object.assign(el.style, styles);
   }
@@ -293,8 +412,7 @@ export class BuildEngine {
   private restoreInlineStyle(el: HTMLElement | SVGElement) {
     const saved = this.savedInlineStyles.get(el);
     if (!saved) return;
-    el.style.clipPath = saved.clipPath;
-    el.style.borderRadius = saved.borderRadius;
+    Object.assign(el.style, saved);
     this.savedInlineStyles.delete(el);
   }
 
@@ -322,12 +440,14 @@ export class BuildEngine {
     this.needsRemeasure = !this.finished;
   };
 
-  // 글꼴 적용 후 위치 재측정. 움직이는 요소를 재면 위치가 틀어지므로 자동 레이아웃 중에는 미룸
+  // 글꼴 적용 후 위치 재측정. 움직이거나 줄어든 요소를 재면 위치가 틀어지므로 자동 레이아웃과 글자 키우기 중에는 미룸
   private remeasureIfReady() {
-    if (!this.needsRemeasure || this.groups.some((group) => group.state === "applying")) return;
+    if (!this.needsRemeasure || this.growingTexts.size > 0) return;
+    if (this.groups.some((group) => group.state === "applying")) return;
     this.needsRemeasure = false;
     for (const layer of this.layers) layer.rect = readRect(layer.el);
     for (const group of this.groups) group.rect = readRect(group.el);
+    this.remeasureGuides();
   }
 
   // 키보드 포커스가 들어온 요소와 상위 요소 즉시 표시
@@ -376,6 +496,9 @@ export class BuildEngine {
       agents: this.agents,
       groups: this.groups,
       flashes: this.flashes,
+      guides: this.guides,
+      rulerSize: this.rulerSize,
+      overlayAlpha: this.overlayAlpha,
       tokens: this.tokens,
     };
     paintScene(this.context, scene);
@@ -406,11 +529,33 @@ export class BuildEngine {
     }
     for (const flash of this.flashes) flash.age += delta;
     this.flashes = this.flashes.filter((flash) => flash.age < flash.ttl);
+    this.updateOverlay(delta);
 
     if (!this.roaming && this.done >= this.layers.length) this.roaming = true;
     if (this.roaming && !this.finished && !this.agents.some((agent) => agent.active && agent.busy)) {
       this.completeBuild();
     }
+  }
+
+  // 커서가 일하는 동안 눈금자와 가이드를 띄우고, 화면 안 작업이 끝나면 서서히 옅게 함. 스크롤로 작업이 다시 생기면 다시 띄우고 페이지 조립이 끝나면 가이드를 지움
+  private updateOverlay(delta: number) {
+    const waiting = !this.roaming && this.idleTime > IDLE_DELAY;
+    if (!this.finished && !waiting) {
+      this.overlayAlpha = Math.min(1, this.overlayAlpha + delta / OVERLAY_FADE_IN);
+    } else if (this.overlayAlpha > 0) {
+      this.overlayAlpha = Math.max(0, this.overlayAlpha - delta / OVERLAY_FADE_OUT);
+      if (this.overlayAlpha === 0 && this.finished) {
+        this.guides = [];
+        this.updateGuideCount();
+      }
+    }
+    this.updateOverlayState();
+  }
+
+  // 시험과 확인을 위해 눈금자가 보이는지를 바뀔 때만 Canvas 에 표시
+  private updateOverlayState() {
+    const state = this.overlayAlpha > 0 ? "shown" : "hidden";
+    if (this.options.canvas.dataset.buildOverlay !== state) this.options.canvas.dataset.buildOverlay = state;
   }
 
   // 할 일의 양에 맞춰 화면에 나타나는 커서 수 조절
@@ -441,6 +586,7 @@ export class BuildEngine {
 
   // 작업 중인 커서나 진행 중인 자동 레이아웃까지 포함해 남은 일이 있는지 판별
   private hasAvailableWork() {
+    if (this.guides.some((guide) => !guide.claimed)) return true;
     if (this.agents.some((agent) => agent.active && agent.busy)) return true;
     if (this.groups.some((group) => group.state === "applying" || this.isGroupAvailable(group))) return true;
     return this.layers.some((layer) => this.isLayerAvailable(layer));
@@ -505,13 +651,78 @@ export class BuildEngine {
     agent.tool = "arrow";
     agent.draft = null;
     agent.caret = null;
+    agent.chip = null;
+    agent.carry = null;
+    agent.dropTarget = null;
     if (this.roaming) {
       agent.busy = false;
       agent.steps = this.roamSteps(agent);
       return;
     }
     agent.busy = true;
+    // Figma 처럼 가이드를 먼저 놓고, 다 놓은 뒤에 요소 작업을 시작함
+    const guideWork = this.claimGuideWork(agent);
+    if (guideWork) {
+      agent.steps = guideWork;
+      return;
+    }
+    if (this.guides.some((guide) => !guide.placed)) {
+      agent.steps = this.waitForGuidesSteps(agent);
+      return;
+    }
     agent.steps = this.claimGroupWork(agent) ?? this.claimLayerWork(agent) ?? this.idleSteps(agent);
+  }
+
+  private claimGuideWork(agent: Agent) {
+    const guide = this.guides.find((candidate) => !candidate.claimed);
+    if (!guide) return null;
+    guide.claimed = true;
+    return this.guideSteps(agent, guide);
+  }
+
+  // 눈금자에서 가이드를 끌어내 정렬 위치에 놓는 동작 생성. 세로 가이드는 왼쪽 눈금자, 가로 가이드는 위쪽 눈금자에서 시작함
+  private guideSteps(agent: Agent, guide: Guide): Step[] {
+    const along = randomBetween(0.3, 0.7);
+    const grab =
+      guide.axis === "x"
+        ? { x: window.scrollX + this.rulerSize / 2, y: window.scrollY + this.height * along }
+        : { x: window.scrollX + this.width * along, y: window.scrollY + this.rulerSize / 2 };
+    let from: Point | null = null;
+    return [
+      this.moveTo(agent, grab),
+      {
+        duration: randomBetween(560, 760),
+        tick: (progress) => {
+          from ??= { x: agent.x, y: agent.y };
+          const eased = easeInOut(progress);
+          if (guide.axis === "x") {
+            guide.position = from.x + (guide.target - from.x) * eased;
+            agent.x = guide.position;
+          } else {
+            guide.position = from.y + (guide.target - from.y) * eased;
+            agent.y = guide.position;
+          }
+          guide.label = { x: agent.x, y: agent.y };
+        },
+        finish: () => {
+          guide.position = guide.target;
+          guide.label = null;
+          guide.placed = true;
+          this.updateGuideCount();
+        },
+      },
+      { duration: 120 },
+    ];
+  }
+
+  // 가이드를 다 놓을 때까지 화면 안을 짧게 맴도는 동작 생성
+  private waitForGuidesSteps(agent: Agent): Step[] {
+    agent.busy = false;
+    const target = {
+      x: window.scrollX + randomBetween(0.15, 0.85) * this.width,
+      y: window.scrollY + randomBetween(0.2, 0.8) * this.height,
+    };
+    return [this.travel(agent, target, randomBetween(500, 900)), { duration: randomBetween(80, 220) }];
   }
 
   private claimGroupWork(agent: Agent) {
@@ -632,6 +843,7 @@ export class BuildEngine {
   private layerSteps(agent: Agent, layer: Layer): Step[] {
     const { rect } = layer;
     if (layer.kind === "text") return this.typeSteps(agent, layer);
+    if (layer.el instanceof HTMLImageElement) return this.dropImageSteps(agent, layer);
 
     const isLarge = rect.w >= 40 && rect.h >= 28;
     const roundsCorner = layer.kind === "frame" && isLarge && layer.radius >= 6 && Math.random() < 0.7;
@@ -663,6 +875,86 @@ export class BuildEngine {
     }
     if (layer.parent && Math.random() < 0.22) this.addMeasure(layer);
     return steps;
+  }
+
+  // 커서가 가까운 화면 바깥으로 나가 사진 썸네일을 들고 들어온 뒤 사진 영역에 놓는 동작 생성
+  private dropImageSteps(agent: Agent, layer: Layer): Step[] {
+    const image = layer.el as HTMLImageElement;
+    const { rect } = layer;
+    const isNarrow = this.width < 768;
+    const w = clamp(rect.w * 0.35, isNarrow ? 80 : 96, isNarrow ? 130 : 180);
+    const h = (w * rect.h) / Math.max(rect.w, 1);
+    const carry: Carry = { image, w, h, offset: { x: -w * 0.3, y: -h * 0.3 }, label: imageFileName(image) };
+
+    const center = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    const viewTop = window.scrollY;
+    const fromLeft = center.x - window.scrollX < this.width / 2;
+    const outside = {
+      x: fromLeft ? window.scrollX - 60 : window.scrollX + this.width + 60,
+      y: clamp(center.y + randomBetween(-80, 80), viewTop + 60, viewTop + this.height - 60),
+    };
+    // 사진이 화면보다 길면 화면 안에 보이는 부분에 놓도록 놓는 위치를 화면 안으로 당김
+    const visibleY = clamp(center.y, viewTop + 80, viewTop + this.height - 80);
+    const drop = { x: center.x, y: clamp(visibleY, rect.y + 10, rect.y + rect.h - 10) };
+    const isInside = (point: Point) =>
+      point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+    const carryIn = this.travel(agent, drop, randomBetween(700, 950));
+
+    return [
+      this.travel(agent, outside, clamp(Math.hypot(outside.x - agent.x, outside.y - agent.y) * 0.45, 260, 620)),
+      {
+        duration: 140,
+        finish: () => {
+          agent.carry = carry;
+          image.setAttribute("data-build-phase", "dragging");
+        },
+      },
+      {
+        duration: carryIn.duration,
+        tick: (progress) => {
+          carryIn.tick?.(progress);
+          agent.dropTarget = isInside(agent) ? rect : null;
+        },
+      },
+      {
+        duration: 180,
+        tick: () => {
+          agent.dropTarget = rect;
+        },
+      },
+      {
+        duration: 0,
+        finish: () => {
+          const thumb = { x: agent.x + carry.offset.x, y: agent.y + carry.offset.y, w: carry.w, h: carry.h };
+          agent.carry = null;
+          agent.dropTarget = null;
+          image.setAttribute("data-build-phase", "dropping");
+          this.revealDroppedImage(layer, thumb);
+        },
+      },
+      { duration: DROP_SETTLE, finish: () => image.removeAttribute("data-build-phase") },
+    ];
+  }
+
+  // 놓은 썸네일의 위치와 크기에서 원래 크기로 튕기며 커지는 효과와 함께 사진 표시
+  private revealDroppedImage(layer: Layer, thumb: Rect) {
+    if (layer.state === "revealed") return;
+    layer.el.removeAttribute("data-build-hidden");
+    this.markRevealed(layer);
+    const { rect } = layer;
+    const scale = thumb.w / Math.max(rect.w, 1);
+    this.play(
+      layer.el,
+      [
+        {
+          transformOrigin: "0 0",
+          transform: `translate(${thumb.x - rect.x}px, ${thumb.y - rect.y}px) scale(${scale})`,
+          opacity: 0.92,
+        },
+        { transformOrigin: "0 0", transform: "translate(0px, 0px) scale(1)", opacity: 1 },
+      ],
+      { duration: DROP_SETTLE, easing: SPRING_EASING },
+    );
   }
 
   // 모서리를 드래그해 둥글게 만드는 동작 생성
@@ -720,14 +1012,15 @@ export class BuildEngine {
     }
   }
 
-  // 글자를 한 줄씩 왼쪽부터 드러내는 입력 동작 생성
+  // 글자를 한 줄씩 왼쪽부터 드러내는 입력 동작 생성. 큰 글자는 작은 크기로 입력한 뒤 키움
   private typeSteps(agent: Agent, layer: Layer): Step[] {
     const el = layer.el as HTMLElement;
     const length = el.textContent?.trim().length ?? 0;
-    const isInline = getComputedStyle(el).display === "inline";
+    const style = getComputedStyle(el);
     const start = { x: layer.rect.x, y: layer.rect.y };
 
-    if (isInline) {
+    // inline 요소에는 transform 이 적용되지 않아 크기 키우기에서 제외함
+    if (style.display === "inline") {
       return [this.moveTo(agent, start), { duration: 120, finish: () => this.revealLayer(layer) }];
     }
 
@@ -735,45 +1028,122 @@ export class BuildEngine {
     const widths = lines.map((line) => line.right - line.left);
     const totalWidth = widths.reduce((sum, width) => sum + width, 0) || 1;
     const glyphs = Math.max(length, 1);
-    const caretStart = { x: start.x + lines[0].left, y: start.y + lines[0].top };
+    const growth = this.textGrowth(layer, style, lines);
+    const scale = growth?.startScale ?? 1;
+    const caretStart = textPoint(layer, growth, scale, lines[0].left, lines[0].top);
     let started = false;
+
+    const typing: Step = {
+      duration: clamp(length * 24, 240, 1000),
+      tick: (progress) => {
+        if (!started) {
+          started = true;
+          agent.tool = "text";
+          el.setAttribute("data-build-phase", "typing");
+          this.overrideInlineStyle(el, { clipPath: "inset(0 100% 0 0)" });
+          if (growth) {
+            this.growingTexts.add(el);
+            this.overrideInlineStyle(el, {
+              transform: `scale(${growth.startScale})`,
+              transformOrigin: `${growth.origin.x}px ${growth.origin.y}px`,
+            });
+            // 키우기가 끝날 때까지 안쪽 요소 작업이 시작되지 않도록 완성 처리는 미룸
+            el.removeAttribute("data-build-hidden");
+          } else {
+            this.revealLayer(layer);
+          }
+        }
+        let remaining = (Math.floor(progress * glyphs) / glyphs) * totalWidth;
+        let index = 0;
+        while (index < lines.length - 1 && remaining > widths[index]) {
+          remaining -= widths[index];
+          index += 1;
+        }
+        const line = lines[index];
+        const edge = line.left + Math.min(remaining, widths[index]);
+        // clip-path 는 배율 적용 전 좌표를 쓰므로 화면에서 잰 폭을 배율로 되돌림
+        const width = el.getBoundingClientRect().width / scale;
+        el.style.clipPath = `polygon(-4px -4px, ${width + 4}px -4px, ${width + 4}px ${line.top}px, ${edge}px ${line.top}px, ${edge}px ${line.bottom + 2}px, -4px ${line.bottom + 2}px)`;
+        const caret = textPoint(layer, growth, scale, edge, line.top);
+        const height = (line.bottom - line.top) * scale;
+        agent.caret = { x: caret.x, y: caret.y, height };
+        agent.x = caret.x + 2;
+        agent.y = caret.y + height * 0.75;
+      },
+      finish: () => {
+        agent.draft = null;
+        agent.caret = null;
+        agent.tool = "arrow";
+        if (growth) {
+          el.style.clipPath = this.savedInlineStyles.get(el)?.clipPath ?? "";
+          return;
+        }
+        this.restoreInlineStyle(el);
+        el.removeAttribute("data-build-phase");
+      },
+    };
 
     return [
       ...(layer.isFramedText
         ? this.frameBeforeTypingSteps(agent, layer, caretStart)
         : [this.moveTo(agent, caretStart)]),
+      typing,
+      ...(growth ? this.growSteps(agent, layer, growth) : []),
+    ];
+  }
+
+  // 큰 글자를 Figma 새 글자 기본 크기에서 시작하도록 배율과 기준점 계산. 표 셀과 작은 글자는 제외함
+  private textGrowth(layer: Layer, style: CSSStyleDeclaration, lines: TextBox[]): TextGrowth | null {
+    const fontSize = parseFloat(style.fontSize);
+    if (layer.isFramedText || !(fontSize >= GROW_MIN_FONT_SIZE)) return null;
+    const align = style.textAlign;
+    const originX = align === "center" ? layer.rect.w / 2 : align === "right" || align === "end" ? layer.rect.w : 0;
+    return {
+      fontSize,
+      startScale: GROW_START_FONT_SIZE / fontSize,
+      origin: { x: originX, y: 0 },
+      box: unionLines(lines),
+    };
+  }
+
+  // 글자 영역 오른쪽 아래 모서리를 끌어 글자 크기를 정수 px 단위로 키우는 동작 생성
+  private growSteps(agent: Agent, layer: Layer, growth: TextGrowth): Step[] {
+    const el = layer.el as HTMLElement;
+    const { box, fontSize, startScale } = growth;
+    const corner = (scale: number) => textPoint(layer, growth, scale, box.right, box.bottom);
+    const selection = (scale: number): Rect => {
+      const topLeft = textPoint(layer, growth, scale, box.left, box.top);
+      const bottomRight = corner(scale);
+      return { x: topLeft.x, y: topLeft.y, w: bottomRight.x - topLeft.x, h: bottomRight.y - topLeft.y };
+    };
+    let started = false;
+
+    return [
+      this.moveTo(agent, corner(startScale)),
       {
-        duration: clamp(length * 24, 240, 1000),
+        duration: clamp((fontSize - GROW_START_FONT_SIZE) * GROW_MS_PER_PX, 420, 900),
         tick: (progress) => {
           if (!started) {
             started = true;
-            agent.tool = "text";
-            el.setAttribute("data-build-phase", "typing");
-            this.overrideInlineStyle(el, { clipPath: "inset(0 100% 0 0)" });
-            this.revealLayer(layer);
+            el.setAttribute("data-build-phase", "sizing");
           }
-          let remaining = (Math.floor(progress * glyphs) / glyphs) * totalWidth;
-          let index = 0;
-          while (index < lines.length - 1 && remaining > widths[index]) {
-            remaining -= widths[index];
-            index += 1;
-          }
-          const line = lines[index];
-          const edge = line.left + Math.min(remaining, widths[index]);
-          const box = el.getBoundingClientRect();
-          el.style.clipPath = `polygon(-4px -4px, ${box.width + 4}px -4px, ${box.width + 4}px ${line.top}px, ${edge}px ${line.top}px, ${edge}px ${line.bottom + 2}px, -4px ${line.bottom + 2}px)`;
-          const caretX = layer.rect.x + edge;
-          const caretY = layer.rect.y + line.top;
-          agent.caret = { x: caretX, y: caretY, height: line.bottom - line.top };
-          agent.x = caretX + 2;
-          agent.y = caretY + (line.bottom - line.top) * 0.75;
+          const size = Math.round(GROW_START_FONT_SIZE + (fontSize - GROW_START_FONT_SIZE) * easeInOut(progress));
+          const scale = progress >= 1 ? 1 : size / fontSize;
+          el.style.transform = `scale(${scale})`;
+          const point = corner(scale);
+          agent.x = point.x;
+          agent.y = point.y;
+          agent.draft = { rect: selection(scale), filled: false, hideSize: true };
+          agent.chip = `Size ${size}`;
         },
         finish: () => {
           this.restoreInlineStyle(el);
           el.removeAttribute("data-build-phase");
+          this.growingTexts.delete(el);
           agent.draft = null;
-          agent.caret = null;
-          agent.tool = "arrow";
+          agent.chip = null;
+          this.addFlash({ kind: "chip", x: agent.x + 34, y: agent.y - 24, label: `Size ${Math.round(fontSize)}`, age: 0, ttl: 520 });
+          this.revealLayer(layer);
         },
       },
     ];

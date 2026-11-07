@@ -1,4 +1,4 @@
-import type { Agent, BuildScene, Draft, Flash, Rect } from "./types";
+import type { Agent, BuildScene, Carry, Draft, Flash, Rect } from "./types";
 
 // lucide 의 mouse-pointer-2 아이콘 경로 사용
 const CURSOR_PATH =
@@ -73,6 +73,7 @@ function drawSelection(ctx: CanvasRenderingContext2D, scene: BuildScene, draft: 
     ctx.strokeRect(x - HANDLE_SIZE / 2, y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
   }
 
+  if (draft.hideSize) return;
   const label = `${Math.round(rect.w)} × ${Math.round(rect.h)}`;
   drawLabel(ctx, scene, label, rect.x + rect.w / 2, rect.y + rect.h + 6, brand, onBrand);
 }
@@ -148,6 +149,150 @@ function drawFlash(ctx: CanvasRenderingContext2D, scene: BuildScene, flash: Flas
   ctx.globalAlpha = 1;
 }
 
+// 끌고 온 사진을 놓을 수 있는 영역을 파란 테두리와 옅은 바탕으로 표시
+function drawDropTarget(ctx: CanvasRenderingContext2D, scene: BuildScene, rect: Rect) {
+  if (isOutsideView(scene, rect)) return;
+  ctx.fillStyle = scene.tokens.brand;
+  ctx.globalAlpha = 0.08;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = scene.tokens.brand;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
+}
+
+// 사진 비율을 유지한 채 썸네일 비율에 맞게 가운데를 잘라 그림. 아직 받지 못한 사진은 회색 카드로 대신함
+function drawCarry(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agent, carry: Carry) {
+  const { image, w, h, offset, label } = carry;
+  const x = agent.x + offset.x;
+  const y = agent.y + offset.y;
+  ctx.save();
+  ctx.globalAlpha = agent.alpha * 0.92;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 6;
+  ctx.fillStyle = scene.tokens.surface;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 6);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.clip();
+  if (image.complete && image.naturalWidth > 0) {
+    const scale = Math.max(w / image.naturalWidth, h / image.naturalHeight);
+    const sourceW = w / scale;
+    const sourceH = h / scale;
+    const sourceX = (image.naturalWidth - sourceW) / 2;
+    const sourceY = (image.naturalHeight - sourceH) / 2;
+    ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, x, y, w, h);
+  } else {
+    ctx.fillStyle = scene.tokens.placeholder;
+    ctx.globalAlpha *= 0.3;
+    ctx.fillRect(x, y, w, h);
+  }
+  ctx.restore();
+
+  ctx.globalAlpha = agent.alpha;
+  ctx.strokeStyle = scene.tokens.rulerLine;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 6);
+  ctx.stroke();
+  drawLabel(ctx, scene, label, x + w / 2, y + h + 6, scene.tokens.brand, scene.tokens.onBrand);
+  ctx.globalAlpha = 1;
+}
+
+// 가이드 선과 끄는 동안의 위치 숫자 그리기
+function drawGuides(ctx: CanvasRenderingContext2D, scene: BuildScene) {
+  const { guides, overlayAlpha, rulerSize, tokens } = scene;
+  if (overlayAlpha <= 0) return;
+  ctx.strokeStyle = tokens.danger;
+  ctx.lineWidth = 1;
+  for (const guide of guides) {
+    if (guide.position === null) continue;
+    ctx.globalAlpha = overlayAlpha * (guide.placed ? 0.7 : 1);
+    ctx.beginPath();
+    if (guide.axis === "x") {
+      const x = Math.round(guide.position) + 0.5;
+      ctx.moveTo(x, scene.scrollY + rulerSize);
+      ctx.lineTo(x, scene.scrollY + scene.height);
+    } else {
+      const y = Math.round(guide.position) + 0.5;
+      ctx.moveTo(scene.scrollX + rulerSize, y);
+      ctx.lineTo(scene.scrollX + scene.width, y);
+    }
+    ctx.stroke();
+    if (guide.label) {
+      ctx.globalAlpha = overlayAlpha;
+      const value = `${Math.round(guide.position)}`;
+      drawLabel(ctx, scene, value, guide.label.x + 30, guide.label.y - 26, tokens.danger, tokens.onDanger);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Figma 눈금자처럼 화면 위쪽과 왼쪽에 문서 좌표 눈금 표시. 선택 박스 범위는 파란 띠로 표시
+function drawRulers(ctx: CanvasRenderingContext2D, scene: BuildScene) {
+  const { overlayAlpha, rulerSize: size, width, height, scrollX, scrollY, tokens } = scene;
+  if (overlayAlpha <= 0) return;
+  ctx.globalAlpha = overlayAlpha;
+  ctx.fillStyle = tokens.surface;
+  ctx.fillRect(0, 0, width, size);
+  ctx.fillRect(0, 0, size, height);
+
+  ctx.fillStyle = tokens.brand;
+  ctx.globalAlpha = overlayAlpha * 0.2;
+  for (const agent of scene.agents) {
+    if (!agent.active || !agent.draft) continue;
+    const { rect } = agent.draft;
+    ctx.fillRect(rect.x - scrollX, 0, rect.w, size);
+    ctx.fillRect(0, rect.y - scrollY, size, rect.h);
+  }
+  ctx.globalAlpha = overlayAlpha;
+
+  const fontSize = size < 20 ? 7.5 : 9;
+  ctx.strokeStyle = tokens.rulerText;
+  ctx.fillStyle = tokens.rulerText;
+  ctx.lineWidth = 1;
+  ctx.font = `500 ${fontSize}px ${tokens.fontFamily}`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  const tickLength = (value: number) => size * (value % 100 === 0 ? 0.55 : value % 50 === 0 ? 0.35 : 0.2);
+
+  ctx.beginPath();
+  for (let value = Math.ceil((scrollX + size) / 10) * 10; value <= scrollX + width; value += 10) {
+    const x = Math.round(value - scrollX) + 0.5;
+    ctx.moveTo(x, size);
+    ctx.lineTo(x, size - tickLength(value));
+    if (value % 100 === 0) ctx.fillText(`${value}`, x + 3, 2);
+  }
+  for (let value = Math.ceil((scrollY + size) / 10) * 10; value <= scrollY + height; value += 10) {
+    const y = Math.round(value - scrollY) + 0.5;
+    ctx.moveTo(size, y);
+    ctx.lineTo(size - tickLength(value), y);
+    if (value % 100 === 0) {
+      // 왼쪽 숫자는 Figma 처럼 아래에서 위로 읽히도록 돌려서 표시
+      const label = `${value}`;
+      ctx.save();
+      ctx.translate(2, y + 3 + ctx.measureText(label).width);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    }
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = tokens.surface;
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = tokens.rulerLine;
+  ctx.beginPath();
+  ctx.moveTo(0, size - 0.5);
+  ctx.lineTo(width, size - 0.5);
+  ctx.moveTo(size - 0.5, 0);
+  ctx.lineTo(size - 0.5, height);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
 // 커서 또는 글자 입력 커서와 name tag 그리기
 function drawAgent(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agent) {
   if (agent.alpha <= 0) return;
@@ -197,6 +342,11 @@ function drawAgent(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agen
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillText(agent.name, left + 6, top + 10.5);
+
+  // 작업 중 바뀌는 값은 name tag 와 겹치지 않도록 커서 위쪽에 표시
+  if (agent.chip) {
+    drawLabel(ctx, scene, agent.chip, agent.x + 34, agent.y - 24, scene.tokens.brand, scene.tokens.onBrand);
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -223,11 +373,20 @@ export function paintScene(ctx: CanvasRenderingContext2D, scene: BuildScene) {
     }
   }
 
+  drawGuides(ctx, scene);
   for (const flash of scene.flashes) drawFlash(ctx, scene, flash);
   for (const agent of scene.agents) {
     if (agent.active && agent.draft) drawSelection(ctx, scene, agent.draft);
+    if (agent.active && agent.dropTarget) drawDropTarget(ctx, scene, agent.dropTarget);
   }
+
+  // 눈금자는 화면에 고정되므로 스크롤 이동 없이 그린 뒤, 커서가 눈금자 위로 지나가도록 커서를 마지막에 그림
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawRulers(ctx, scene);
+  ctx.translate(-scrollX, -scrollY);
   for (const agent of scene.agents) {
-    if (agent.active) drawAgent(ctx, scene, agent);
+    if (!agent.active) continue;
+    if (agent.carry) drawCarry(ctx, scene, agent, agent.carry);
+    drawAgent(ctx, scene, agent);
   }
 }
