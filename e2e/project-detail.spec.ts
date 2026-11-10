@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const SLUGS = ["cbm-monitoring", "minari-design-storybook", "we-on", "greeon"];
+const SLUGS = ["cbm-monitoring", "minari-design-storybook", "paytap-owner", "we-on", "greeon"];
 
 const statusBar = (page: Page) => page.getByTestId("build-status");
 const hiddenElements = (page: Page) => page.locator("[data-build-hidden]");
@@ -40,12 +40,12 @@ test.describe("프로젝트 상세 화면 이동", () => {
     await expect(page.getByRole("heading", { level: 1, name: "minari-design-storybook" })).toBeAttached();
   });
 
-  test("프로젝트 카드를 CBM, minari, WE-ON, GREEON 순서로 넓은 폭에서 한 줄에 2개씩 표시함", async ({ page }) => {
+  test("프로젝트 카드를 CBM, minari, PAYTAP 점주앱, WE-ON, GREEON 순서로 넓은 폭에서 한 줄에 2개씩 표시함", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     await skipButton(page).click();
     const titles = page.locator('#projects [data-slot="card-title"]');
-    await expect(titles).toHaveText(["CBM 모니터링 시스템", "minari-design-storybook", "WE-ON", "GREEON"]);
+    await expect(titles).toHaveText(["CBM 모니터링 시스템", "minari-design-storybook", "PAYTAP 점주앱", "WE-ON", "GREEON"]);
 
     const tops = await page.locator('#projects [data-slot="card"]').evaluateAll((cards) =>
       cards.map((card) => Math.round(card.getBoundingClientRect().top)),
@@ -53,6 +53,7 @@ test.describe("프로젝트 상세 화면 이동", () => {
     expect(tops[0]).toBe(tops[1]);
     expect(tops[2]).toBe(tops[3]);
     expect(tops[2]).toBeGreaterThan(tops[0]);
+    expect(tops[4]).toBeGreaterThan(tops[2]);
   });
 
   test("상세 화면의 프로젝트 목록 링크를 누르면 첫 페이지의 Projects 섹션으로 돌아옴", async ({ page }) => {
@@ -443,6 +444,24 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     }
   });
 
+  test("PAYTAP 점주앱 상세 화면에 고해상도 앱 화면 4장과 설명을 표시함", async ({ page }) => {
+    await page.goto("/projects/paytap-owner/");
+    await skipButton(page).click();
+    await screens(page).scrollIntoViewIfNeeded();
+
+    await expect(screens(page).locator("figcaption")).toHaveText(["홈", "시간대별 매출 변화", "상품 매출", "영수증 상세"]);
+    const images = screens(page).getByRole("img");
+    await expect(images).toHaveCount(4);
+    for (const image of await images.all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1206);
+    }
+    await expect(page.locator("article header").getByRole("link", { name: "Repository 보기" })).toHaveAttribute(
+      "href",
+      "https://github.com/san5an3an/paytap_flutter_employee_app",
+    );
+  });
+
   test("GREEON 상세 화면에 고해상도 앱 화면 4장과 설명을 표시함", async ({ page }) => {
     await page.goto("/projects/greeon/");
     await skipButton(page).click();
@@ -475,10 +494,10 @@ test.describe("상세 화면 실제 화면 이미지", () => {
     );
   });
 
-  test("예시 값 안내 문구를 CBM, WE-ON, GREEON 상세 화면에만 표시함", async ({ page }) => {
+  test("예시 값 안내 문구를 CBM, PAYTAP 점주앱, WE-ON, GREEON 상세 화면에만 표시함", async ({ page }) => {
     const note = page.getByText("화면의 값은 예시이며, 실제와는 다를 수 있습니다.", { exact: true });
 
-    for (const slug of ["cbm-monitoring", "we-on", "greeon"]) {
+    for (const slug of ["cbm-monitoring", "paytap-owner", "we-on", "greeon"]) {
       await page.goto(`/projects/${slug}/`);
       await skipButton(page).click();
       await note.scrollIntoViewIfNeeded();
