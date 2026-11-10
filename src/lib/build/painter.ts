@@ -293,6 +293,48 @@ function drawRulers(ctx: CanvasRenderingContext2D, scene: BuildScene) {
   ctx.globalAlpha = 1;
 }
 
+// 꼬리 한 겹을 커서에서 멀수록 옅게 그림. strength 는 꼬리 끝 0 에서 커서 1 까지의 위치
+function strokeTrail(
+  ctx: CanvasRenderingContext2D,
+  points: { x: number; y: number }[],
+  color: string,
+  alphaAt: (strength: number) => number,
+  widthAt: (strength: number) => number,
+) {
+  const last = points.length - 1;
+  ctx.strokeStyle = color;
+  for (let index = 1; index <= last; index += 1) {
+    const strength = index / last;
+    ctx.globalAlpha = alphaAt(strength);
+    ctx.lineWidth = widthAt(strength);
+    ctx.beginPath();
+    ctx.moveTo(points[index - 1].x, points[index - 1].y);
+    ctx.lineTo(points[index].x, points[index].y);
+    ctx.stroke();
+  }
+}
+
+// 시작 고리 동안 지나온 위치를 커서에서 멀수록 옅고 가는 선으로 이어 빛줄기처럼 표시
+function drawTrail(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agent) {
+  if (agent.trail.length < 2 || agent.alpha <= 0) return;
+  const points = [...agent.trail, { x: agent.x, y: agent.y }];
+  const alpha = agent.alpha;
+  ctx.save();
+  // 둥근 끝은 반투명 선이 이음매마다 겹쳐 점처럼 진해지므로 평평한 끝을 씀
+  ctx.lineCap = "butt";
+  if (!scene.tokens.dark) {
+    strokeTrail(ctx, points, agent.color, (s) => alpha * s * s * 0.6, (s) => 1 + s * 3);
+    ctx.restore();
+    return;
+  }
+  // 어두운 바탕에서는 커서 색이 바탕에 묻히므로 겹칠수록 밝아지게 합성하고 번짐, 색 선, 흰 심 세 겹으로 빛줄기를 만듦
+  ctx.globalCompositeOperation = "lighter";
+  strokeTrail(ctx, points, agent.color, (s) => alpha * s * s * 0.35, (s) => 3 + s * 7);
+  strokeTrail(ctx, points, agent.color, (s) => alpha * s * s, (s) => 1.5 + s * 2.5);
+  strokeTrail(ctx, points, scene.tokens.foreground, (s) => alpha * s * s * s * 0.7, (s) => 0.75 + s * 1.25);
+  ctx.restore();
+}
+
 // 커서 또는 글자 입력 커서와 name tag 그리기
 function drawAgent(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agent) {
   if (agent.alpha <= 0) return;
@@ -330,18 +372,18 @@ function drawAgent(ctx: CanvasRenderingContext2D, scene: BuildScene, agent: Agen
     ctx.restore();
   }
 
-  ctx.font = `600 11.5px ${scene.tokens.fontFamily}`;
+  ctx.font = `600 12.5px ${scene.tokens.fontFamily}`;
   const width = ctx.measureText(agent.name).width + 12;
   const left = agent.x + agent.size * 0.7;
   const top = agent.y + agent.size * 0.75;
   ctx.fillStyle = agent.color;
   ctx.beginPath();
-  ctx.roundRect(left, top, width, 20, 4);
+  ctx.roundRect(left, top, width, 22, 4);
   ctx.fill();
   ctx.fillStyle = agent.onColor;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(agent.name, left + 6, top + 10.5);
+  ctx.fillText(agent.name, left + 6, top + 11.5);
 
   // 작업 중 바뀌는 값은 name tag 와 겹치지 않도록 커서 위쪽에 표시
   if (agent.chip) {
@@ -384,6 +426,9 @@ export function paintScene(ctx: CanvasRenderingContext2D, scene: BuildScene) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawRulers(ctx, scene);
   ctx.translate(-scrollX, -scrollY);
+  for (const agent of scene.agents) {
+    if (agent.active) drawTrail(ctx, scene, agent);
+  }
   for (const agent of scene.agents) {
     if (!agent.active) continue;
     if (agent.carry) drawCarry(ctx, scene, agent, agent.carry);

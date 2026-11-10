@@ -2,6 +2,7 @@ import { collectLayers, measureTextLines, readRect } from "./collect-layers";
 import { paintScene } from "./painter";
 import type {
   Agent,
+  AgentJob,
   BuildScene,
   BuildStatus,
   BuildTokens,
@@ -16,12 +17,61 @@ import type {
   Step,
 } from "./types";
 
-const AGENT_NAMES = ["UI/UX", "iOS", "Flutter", "React", "Agent", "SwiftUI", "TypeScript", "Design System", "UIKit", "Next.js"];
+const ALL_JOBS: AgentJob[] = ["guide", "group", "frame", "text", "control", "icon", "image"];
+
+// 이름과 맡는 일. 앞에서부터 화면에 나오므로 처음 6개와 모바일 14개 안에 모든 종류가 들어가게 섞어 둠.
+// 시작 고리의 5개 안에 가이드를 놓는 커서를 3개 두어 고리가 끝나면 가이드 3개를 한 번에 놓게 함
+const AGENT_ROLES: { name: string; jobs: AgentJob[] }[] = [
+  { name: "Guides", jobs: ["guide", "frame"] },
+  { name: "Grid", jobs: ["guide", "frame"] },
+  { name: "QA", jobs: ALL_JOBS },
+  { name: "Fonts", jobs: ["text"] },
+  { name: "Buttons", jobs: ["control"] },
+  { name: "Icons", jobs: ["icon"] },
+  { name: "Auto Layout", jobs: ["group", "frame"] },
+  { name: "Type", jobs: ["text"] },
+  { name: "Images", jobs: ["image"] },
+  { name: "Layout", jobs: ["frame"] },
+  { name: "Cards", jobs: ["frame"] },
+  { name: "Copy", jobs: ["text"] },
+  { name: "Links", jobs: ["control"] },
+  { name: "Spacing", jobs: ["group", "frame"] },
+  { name: "Headline", jobs: ["text"] },
+  { name: "Build", jobs: ALL_JOBS },
+  { name: "Surface", jobs: ["frame"] },
+  { name: "Body", jobs: ["text"] },
+  { name: "Nav", jobs: ["control"] },
+  { name: "Media", jobs: ["image", "icon"] },
+  { name: "Shadow", jobs: ["frame"] },
+  { name: "Labels", jobs: ["text"] },
+  { name: "Align", jobs: ["group", "frame"] },
+  { name: "Badges", jobs: ["control"] },
+  { name: "Radius", jobs: ["frame"] },
+  { name: "Captions", jobs: ["text"] },
+  { name: "Fill", jobs: ["frame"] },
+  { name: "States", jobs: ["control"] },
+  { name: "Hangul", jobs: ["text"] },
+  { name: "Border", jobs: ["frame"] },
+  { name: "Kerning", jobs: ["text"] },
+];
 const AGENT_SIZE = 20;
-const DESKTOP_AGENT_COUNT = 28;
+const DESKTOP_AGENT_COUNT = AGENT_ROLES.length;
 const MOBILE_AGENT_COUNT = 14;
 const AMBIENT_AGENT_COUNT = 3;
-const FIRST_AGENT_COUNT = 6;
+const RING_COUNT = 5;
+const INTRO_DURATION = 1800;
+const INTRO_ENTER = 650;
+const INTRO_MAX_DELAY = 420;
+const INTRO_FADE_IN = 220;
+const INTRO_TURN = 1500;
+const RING_RADIUS = 60;
+// 커서 오른쪽 아래에 붙는 name tag 까지 합친 모양이 화면 가운데에 오도록 고리 중심을 옮기는 거리
+const RING_SHIFT: Point = { x: 40, y: 18 };
+// 좁은 화면에서 고리를 줄일 때 화면 양끝과 띄울 거리. 중심을 옮긴 40 에 여백 8 을 더한 값
+const RING_EDGE = RING_SHIFT.x + 8;
+const TRAIL_LENGTH = 10;
+const TRAIL_SAMPLE = 16;
+const TRAIL_FADE = 360;
 const AGENTS_PER_SECOND = 5;
 const IDLE_DELAY = 1100;
 const STATUS_INTERVAL = 100;
@@ -61,6 +111,9 @@ type TextGrowth = {
 
 type InlineStyles = { clipPath: string; borderRadius: string; transform: string; transformOrigin: string };
 
+// 시작 고리에서 커서 하나가 들어오는 출발점, 고리 위 각도, 출발까지 기다리는 시간
+type IntroPath = { agent: Agent; from: Point; angle: number; delay: number };
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -73,6 +126,12 @@ function unionLines(lines: TextBox[]): TextBox {
     left: Math.min(...lines.map((line) => line.left)),
     right: Math.max(...lines.map((line) => line.right)),
   };
+}
+
+// 요소 종류를 커서가 맡는 일 종류로 변환. 그림은 사진과 아이콘을 나눔
+function layerJob(layer: Layer): AgentJob {
+  if (layer.kind === "media") return layer.el instanceof HTMLImageElement ? "image" : "icon";
+  return layer.kind;
 }
 
 // 사진 주소에서 썸네일 라벨로 쓸 파일 이름만 꺼냄
@@ -103,10 +162,24 @@ function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
-// Cobalt 토큰 값을 Canvas 에서 쓸 색상과 글꼴로 변환
-function readTokens(): { tokens: BuildTokens; palette: { color: string; onColor: string }[] } {
+// 색이 어두운지 판별. Canvas 에 넣었다 읽으면 불투명한 색은 #rrggbb 표기로 맞춰지는 것을 이용함
+function isDarkColor(context: CanvasRenderingContext2D, color: string) {
+  context.fillStyle = "#ffffff";
+  context.fillStyle = color;
+  const hex = String(context.fillStyle);
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return false;
+  const [r, g, b] = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+}
+
+// Cobalt 토큰 값을 Canvas 에서 쓸 색상과 글꼴로 변환. 다크 모드 조건을 따로 흉내 내지 않고 실제 바탕색으로 어두운 화면을 판별함
+function readTokens(context: CanvasRenderingContext2D): {
+  tokens: BuildTokens;
+  palette: { color: string; onColor: string }[];
+} {
   const style = getComputedStyle(document.documentElement);
   const read = (name: string) => style.getPropertyValue(name).trim();
+  const surface = read("--semantic-bg-neutral-surface");
   return {
     tokens: {
       brand: read("--semantic-bg-brand-default"),
@@ -114,10 +187,12 @@ function readTokens(): { tokens: BuildTokens; palette: { color: string; onColor:
       danger: read("--semantic-bg-danger-default"),
       onDanger: read("--semantic-fg-on-danger-default"),
       placeholder: read("--semantic-bg-neutral-default"),
-      surface: read("--semantic-bg-neutral-surface"),
+      surface,
       rulerLine: read("--semantic-border-neutral-default"),
       rulerText: read("--semantic-fg-neutral-subtlest"),
+      foreground: read("--semantic-fg-neutral-default"),
       fontFamily: getComputedStyle(document.body).fontFamily,
+      dark: isDarkColor(context, surface),
     },
     palette: [
       { color: read("--component-chart-series-1"), onColor: read("--semantic-fg-on-brand-default") },
@@ -152,7 +227,9 @@ export class BuildEngine {
     surface: "",
     rulerLine: "",
     rulerText: "",
+    foreground: "",
     fontFamily: "",
+    dark: false,
   };
   private frameHandle = 0;
   private lastFrame = 0;
@@ -160,6 +237,12 @@ export class BuildEngine {
   private lastStatus = 0;
   private lastSweep = 0;
   private idleTime = 0;
+  private introRunning = false;
+  private introElapsed = 0;
+  private introPaths: IntroPath[] = [];
+  private ringCount = 0;
+  private trailClock = 0;
+  private trailFade = 0;
   private roaming = false;
   private lastAgentCount = 0;
   private started = false;
@@ -271,7 +354,85 @@ export class BuildEngine {
     this.finished = false;
     this.paused = false;
     this.options.canvas.style.display = "block";
+    this.startIntro();
     this.emitStatus();
+  }
+
+  // 커서들이 화면 양옆에서 들어와 화면 가운데를 둘러싸고 함께 도는 시작 고리 준비. 왼쪽 반원 커서는 왼쪽에서, 오른쪽 반원 커서는 오른쪽에서 들어옴
+  private startIntro() {
+    this.ringCount = Math.min(this.agents.length, RING_COUNT);
+    this.introPaths = this.agents.slice(0, this.ringCount).map((agent, index) => {
+      const angle = (index / this.ringCount) * Math.PI * 2;
+      const spot = this.ringPoint(angle);
+      const fromLeft = Math.cos(angle) < 0;
+      const from = {
+        x: fromLeft ? window.scrollX - OFF_SCREEN_MARGIN : window.scrollX + this.width + OFF_SCREEN_MARGIN,
+        y: clamp(spot.y + randomBetween(-120, 120), window.scrollY + 40, window.scrollY + this.height - 40),
+      };
+      Object.assign(agent, from);
+      agent.active = true;
+      agent.alpha = 0;
+      agent.steps = [];
+      agent.trail = [];
+      return { agent, from, angle, delay: randomBetween(0, INTRO_MAX_DELAY) };
+    });
+    this.introElapsed = 0;
+    this.trailClock = 0;
+    this.trailFade = 0;
+    this.introRunning = true;
+    this.options.canvas.setAttribute("data-build-intro", "");
+  }
+
+  // 시작 고리를 풀고 커서들이 각자 일을 맡도록 전환. 꼬리는 바로 지우지 않고 짧게 줄여 없앰
+  private endIntro() {
+    if (!this.introRunning) return;
+    this.introRunning = false;
+    this.introPaths = [];
+    this.trailFade = TRAIL_FADE;
+    this.options.canvas.removeAttribute("data-build-intro");
+    for (const agent of this.agents) {
+      if (agent.active) agent.alpha = 1;
+    }
+    this.emitStatus();
+  }
+
+  // 화면 가운데를 중심으로 한 지름 120px 원 위의 위치. 좁은 화면에서는 커서가 화면 밖으로 나가지 않도록 줄임
+  private ringPoint(angle: number): Point {
+    const radius = Math.min(RING_RADIUS, this.width / 2 - RING_EDGE);
+    return {
+      x: window.scrollX + this.width / 2 - RING_SHIFT.x + Math.cos(angle) * radius,
+      y: window.scrollY + this.height / 2 - RING_SHIFT.y + Math.sin(angle) * radius,
+    };
+  }
+
+  // 커서마다 정해진 시간에 출발해 돌고 있는 고리 위 위치로 다가가고, 고리 전체는 일정한 속도로 회전
+  private updateIntro(delta: number) {
+    this.introElapsed += delta;
+    const turn = (this.introElapsed / INTRO_TURN) * Math.PI * 2;
+    for (const { agent, from, angle, delay } of this.introPaths) {
+      const local = this.introElapsed - delay;
+      if (local <= 0) continue;
+      const spot = this.ringPoint(angle - turn);
+      const eased = 1 - (1 - Math.min(1, local / INTRO_ENTER)) ** 3;
+      agent.x = from.x + (spot.x - from.x) * eased;
+      agent.y = from.y + (spot.y - from.y) * eased;
+      agent.alpha = Math.min(1, local / INTRO_FADE_IN);
+    }
+    if (this.introElapsed >= INTRO_DURATION) this.endIntro();
+  }
+
+  // 고리 동안 커서가 지나온 위치를 모아 꼬리로 남기고, 고리가 끝나면 꼬리 길이를 줄여 지움
+  private updateTrails(delta: number) {
+    if (!this.introRunning && this.trailFade <= 0) return;
+    this.trailClock += delta;
+    const sample = this.trailClock >= TRAIL_SAMPLE;
+    if (sample) this.trailClock %= TRAIL_SAMPLE;
+    if (!this.introRunning) this.trailFade = Math.max(0, this.trailFade - delta);
+    const limit = this.introRunning ? TRAIL_LENGTH : Math.round((TRAIL_LENGTH * this.trailFade) / TRAIL_FADE);
+    for (const agent of this.agents) {
+      if (sample && agent.active) agent.trail.push({ x: agent.x, y: agent.y });
+      if (agent.trail.length > limit) agent.trail.splice(0, agent.trail.length - limit);
+    }
   }
 
   // Canvas 크기와 토큰을 읽고 name tag 가 달린 커서 생성
@@ -279,16 +440,18 @@ export class BuildEngine {
     this.resizeCanvas();
     this.layoutWidth = window.innerWidth;
     this.rulerSize = window.innerWidth < 768 ? MOBILE_RULER_SIZE : RULER_SIZE;
-    const { tokens, palette } = readTokens();
+    const { tokens, palette } = readTokens(this.context);
     this.tokens = tokens;
 
     const count = window.innerWidth < 768 ? MOBILE_AGENT_COUNT : DESKTOP_AGENT_COUNT;
     this.agents = Array.from({ length: count }, (_, index): Agent => ({
       ...palette[index % palette.length],
-      name: AGENT_NAMES[index % AGENT_NAMES.length],
+      name: AGENT_ROLES[index % AGENT_ROLES.length].name,
+      jobs: AGENT_ROLES[index % AGENT_ROLES.length].jobs,
       size: AGENT_SIZE,
       arc: Math.random() < 0.5 ? -1 : 1,
       ...this.entryPoint(),
+      trail: [],
       alpha: 0,
       active: false,
       busy: false,
@@ -327,6 +490,10 @@ export class BuildEngine {
 
   // 숨김 표시와 진행 중인 효과를 모두 제거
   private resetElements() {
+    this.introRunning = false;
+    this.introPaths = [];
+    this.trailFade = 0;
+    this.options.canvas.removeAttribute("data-build-intro");
     for (const animation of this.animations) animation.cancel();
     this.animations.clear();
     for (const el of Array.from(this.savedInlineStyles.keys())) this.restoreInlineStyle(el);
@@ -348,6 +515,7 @@ export class BuildEngine {
       agent.chip = null;
       agent.carry = null;
       agent.dropTarget = null;
+      agent.trail = [];
     }
     this.flashes = [];
     this.growingTexts.clear();
@@ -513,11 +681,19 @@ export class BuildEngine {
       speed: this.speed,
       finished: this.finished,
       waiting: !this.roaming && this.idleTime > IDLE_DELAY,
+      scanning: this.introRunning,
       colors: this.agents.slice(0, 5).map((agent) => agent.color),
     });
   }
 
+  // 시작 고리가 도는 동안에는 일을 나눠 주지 않고, 고리가 끝난 뒤부터 조립 시간을 셈
   private update(delta: number) {
+    if (this.introRunning) this.updateIntro(delta);
+    else this.updateWork(delta);
+    this.updateTrails(delta);
+  }
+
+  private updateWork(delta: number) {
     this.elapsed += delta;
     if (!this.roaming) {
       this.remeasureIfReady();
@@ -558,12 +734,12 @@ export class BuildEngine {
     if (this.options.canvas.dataset.buildOverlay !== state) this.options.canvas.dataset.buildOverlay = state;
   }
 
-  // 할 일의 양에 맞춰 화면에 나타나는 커서 수 조절
+  // 할 일의 양에 맞춰 화면에 나타나는 커서 수 조절. 시작 고리에 있던 커서 수에서부터 늘림
   private updateAgentPool(delta: number) {
     const hasWork = !this.roaming && this.hasAvailableWork();
     this.idleTime = hasWork ? 0 : this.idleTime + delta;
 
-    const ramp = Math.floor(FIRST_AGENT_COUNT + (this.elapsed / 1000) * AGENTS_PER_SECOND);
+    const ramp = Math.floor(this.ringCount + (this.elapsed / 1000) * AGENTS_PER_SECOND);
     const desired = this.roaming || this.idleTime > IDLE_DELAY ? AMBIENT_AGENT_COUNT : Math.min(this.agents.length, ramp);
 
     this.agents.forEach((agent, index) => {
@@ -674,6 +850,7 @@ export class BuildEngine {
   }
 
   private claimGuideWork(agent: Agent) {
+    if (!agent.jobs.includes("guide")) return null;
     const guide = this.guides.find((candidate) => !candidate.claimed);
     if (!guide) return null;
     guide.claimed = true;
@@ -726,6 +903,7 @@ export class BuildEngine {
   }
 
   private claimGroupWork(agent: Agent) {
+    if (!agent.jobs.includes("group")) return null;
     for (const group of this.groups) {
       if (!this.isGroupAvailable(group)) continue;
       const item = group.items.find((candidate) => !candidate.claimed);
@@ -744,7 +922,7 @@ export class BuildEngine {
   private claimLayerWork(agent: Agent) {
     const candidates: Layer[] = [];
     for (const layer of this.layers) {
-      if (this.isLayerAvailable(layer)) candidates.push(layer);
+      if (this.isLayerAvailable(layer) && agent.jobs.includes(layerJob(layer))) candidates.push(layer);
       if (candidates.length >= 3) break;
     }
     if (candidates.length === 0) return null;
