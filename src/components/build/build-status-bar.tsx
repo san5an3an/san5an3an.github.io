@@ -3,6 +3,7 @@ import { ChevronDown, Pause, Play, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { BuildStatus } from "@/lib/build/types";
+import { cn } from "@/lib/utils";
 
 type BuildStatusBarProps = {
   status: BuildStatus;
@@ -55,10 +56,22 @@ export function BuildStatusBar({
       <span className="font-semibold tabular-nums" data-testid="build-agents">
         {status.agents} agents
       </span>
-      <span className="text-muted-foreground tabular-nums" data-testid="build-layers">
+      {/* 좁은 화면에서는 시작 고리 동안 레이어 수 대신 Scanning page 문구만 보여 막대 폭을 유지함 */}
+      <span
+        className={cn("text-muted-foreground tabular-nums", status.scanning && "hidden sm:inline")}
+        data-testid="build-layers"
+      >
         <span className="font-semibold text-foreground">{status.done}</span> / {status.total} layers
       </span>
-      <Progress value={percent} aria-label="조립 진행률" className="hidden w-16 sm:flex" />
+      {status.scanning ? (
+        <span className="inline-flex items-center gap-1.5 font-medium" data-testid="build-scanning">
+          {/* 바탕 위에 올라가는 표시라 다크 모드에서 밝아지는 brand 글자색 토큰을 씀 */}
+          <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-(--semantic-fg-brand-default)" />
+          Scanning page
+        </span>
+      ) : (
+        <Progress value={percent} aria-label="조립 진행률" className="hidden w-16 sm:flex" />
+      )}
       {status.waiting && (
         <span className="hidden items-center gap-0.5 text-muted-foreground sm:inline-flex">
           스크롤

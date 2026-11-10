@@ -56,8 +56,8 @@ test.describe("조립 애니메이션 재생", () => {
       const box = document.querySelector('#projects [data-slot="card"]')?.getBoundingClientRect();
       if (box) window.scrollTo(0, box.bottom + window.scrollY + 30);
     });
-    // 가이드를 먼저 놓은 뒤 카드 작업을 시작하므로 그 시간까지 기다림
-    await expect(card).not.toHaveAttribute("data-build-hidden", { timeout: 6000 });
+    // 시작 고리(1.8초)가 돌고 가이드를 먼저 놓은 뒤 카드 작업을 시작하므로 그 시간까지 기다림
+    await expect(card).not.toHaveAttribute("data-build-hidden", { timeout: 8000 });
   });
 
   test("조립 도중 스크롤을 맨 위로 되돌려도 상단 메뉴를 완성함", async ({ page }) => {
@@ -80,6 +80,62 @@ test.describe("조립 애니메이션 재생", () => {
       document.querySelector("#skills")?.scrollIntoView();
     });
     await expect(page.locator("#top h1 span").first()).not.toHaveAttribute("data-build-hidden");
+  });
+});
+
+test.describe("시작 고리", () => {
+  const pauseButton = (page: Page) => statusBar(page).getByRole("button", { name: "애니메이션 일시정지" });
+  const scanning = (page: Page) => statusBar(page).getByTestId("build-scanning");
+
+  test("조립을 시작하면 커서 5개가 고리를 돌며 Scanning page 를 표시하고 고리가 끝난 뒤에 가이드를 놓음", async ({ page }) => {
+    // 페이지 스크립트보다 먼저 감시를 붙여 고리가 끝난 순간의 가이드 수와 완성 레이어 수를 기록
+    await page.addInitScript(() => {
+      const record: { started: boolean; guides?: string | null; done?: number } = { started: false };
+      (window as unknown as { intro: typeof record }).intro = record;
+      new MutationObserver((records) => {
+        for (const item of records) {
+          const element = item.target as Element;
+          if (element.hasAttribute("data-build-intro")) {
+            record.started = true;
+          } else if (record.started && record.guides === undefined) {
+            record.guides = element.getAttribute("data-build-guides");
+            const text = document.querySelector("[data-testid='build-layers']")?.textContent ?? "";
+            record.done = Number(text.split("/")[0].trim());
+          }
+        }
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-build-intro"] });
+    });
+    await page.goto("/");
+
+    // 고리를 멈춰 놓고 확인한 뒤 다시 재생
+    await pauseButton(page).click();
+    await expect(canvas(page)).toHaveAttribute("data-build-intro", "");
+    await expect(canvas(page)).toHaveAttribute("data-build-cursors", "5");
+    await expect(scanning(page)).toHaveText("Scanning page");
+    await statusBar(page).getByRole("button", { name: "애니메이션 재생" }).click();
+
+    await expect(canvas(page)).not.toHaveAttribute("data-build-intro", { timeout: 4000 });
+    await expect(scanning(page)).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { intro: unknown }).intro)).toEqual({
+      started: true,
+      guides: "0",
+      done: 0,
+    });
+    await expect(canvas(page)).toHaveAttribute("data-build-guides", "3", { timeout: 8000 });
+  });
+
+  test("고리가 도는 도중 건너뛰면 완성 화면으로 바뀌고 다시 보기를 누르면 고리부터 다시 시작함", async ({ page }) => {
+    await page.goto("/");
+    await pauseButton(page).click();
+    await expect(canvas(page)).toHaveAttribute("data-build-intro", "");
+    await skipButton(page).click();
+
+    await expect(canvas(page)).not.toHaveAttribute("data-build-intro");
+    await expectFinishedPage(page);
+
+    await replayButton(page).click();
+    await expect(canvas(page)).toHaveAttribute("data-build-intro", "");
+    await expect(scanning(page)).toBeVisible();
   });
 });
 
@@ -239,6 +295,7 @@ test.describe("조립 애니메이션 제어", () => {
     await expect(statusBar(page)).toBeVisible();
     await page.setViewportSize({ width: 900, height: 800 });
     await expectFinishedPage(page);
+    await expect(canvas(page)).not.toHaveAttribute("data-build-intro");
   });
 });
 
@@ -315,5 +372,14 @@ test.describe("조립 애니메이션 모바일 화면", () => {
     expect(await overflow()).toBeLessThanOrEqual(0);
     await skipButton(page).click();
     expect(await overflow()).toBeLessThanOrEqual(0);
+  });
+
+  test("모바일 폭에서도 커서 5개가 고리를 돌고 상태 막대에 레이어 수 대신 Scanning page 를 표시함", async ({ page }) => {
+    await page.goto("/");
+    await statusBar(page).getByRole("button", { name: "애니메이션 일시정지" }).click();
+    await expect(canvas(page)).toHaveAttribute("data-build-intro", "");
+    await expect(canvas(page)).toHaveAttribute("data-build-cursors", "5");
+    await expect(statusBar(page).getByTestId("build-scanning")).toBeVisible();
+    await expect(layerCount(page)).toBeHidden();
   });
 });

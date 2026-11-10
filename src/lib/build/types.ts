@@ -68,15 +68,19 @@ export type Step = {
   finish?: () => void;
 };
 
-// 화면에 그려지는 커서 하나의 상태
+export type AgentJob = "guide" | "group" | "frame" | "text" | "control" | "icon" | "image";
+
+// 화면에 그려지는 커서 하나의 상태. jobs 는 이 커서가 맡는 일 종류, trail 은 시작 고리 동안 지나온 위치
 export type Agent = {
   color: string;
   onColor: string;
   name: string;
+  jobs: AgentJob[];
   size: number;
   arc: number;
   x: number;
   y: number;
+  trail: Point[];
   alpha: number;
   active: boolean;
   busy: boolean;
@@ -99,7 +103,9 @@ export type BuildTokens = {
   surface: string;
   rulerLine: string;
   rulerText: string;
+  foreground: string;
   fontFamily: string;
+  dark: boolean;
 };
 
 export type BuildScene = {
@@ -125,5 +131,6 @@ export type BuildStatus = {
   speed: 1 | 2;
   finished: boolean;
   waiting: boolean;
+  scanning: boolean;
   colors: string[];
 };
