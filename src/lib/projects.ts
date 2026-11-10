@@ -269,6 +269,145 @@ export const projects: Project[] = [
     ],
   },
   {
+    slug: "paytap-owner",
+    name: "PAYTAP 점주앱",
+    platform: "iOS, Android",
+    summary:
+      "매장 점주가 포스와 키오스크 매출을 시간대, 상품, 카드사별로 확인하고 영수증까지 찾아볼 수 있는 Flutter 앱이에요.",
+    lead: [
+      "매장 점주가 포스와 키오스크 매출을 시간대, 상품, 카드사별로 확인하고 영수증까지 찾아볼 수 있는 Flutter 앱이에요.",
+      "회사에서 만든 앱으로, 기획과 디자인을 맡았고 공용 위젯, 차트, 검색 필터 같은 공통 부분과 홈, 매출 변화, 상품 매출 화면을 만들었어요.",
+    ],
+    stack: ["Flutter", "Dart", "Riverpod 3", "go_router 17", "fl_chart", "Firebase Cloud Messaging"],
+    repoUrl: "https://github.com/san5an3an/paytap_flutter_employee_app",
+    facts: [
+      { label: "화면", value: "29개" },
+      { label: "화면 경로", value: "35개" },
+      { label: "공용 위젯", value: "25개" },
+      { label: "Dart 코드", value: "약 2만 5천 줄" },
+    ],
+    screens: [
+      {
+        src: "/screens/paytap/home.webp",
+        alt: "오늘, 이번 주, 이번 달 총 매출과 결제 수단별 오늘 매출을 보여주는 PAYTAP 점주앱 홈 화면",
+        caption: "홈",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/paytap/time-sales.webp",
+        alt: "선택한 날의 시간대별 매출을 기간 평균과 나란히 비교하는 막대 차트 화면",
+        caption: "시간대별 매출 변화",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/paytap/goods-sales.webp",
+        alt: "총 매출 금액과 가장 많이 팔린 상품 다섯 개를 도넛 차트로 보여주는 상품 매출 화면",
+        caption: "상품 매출",
+        width: 1206,
+        height: 2622,
+      },
+      {
+        src: "/screens/paytap/receipt-detail.webp",
+        alt: "주문 상품, 할인, 공급가와 부가세, 카드 결제 정보를 보여주는 영수증 상세 화면",
+        caption: "영수증 상세",
+        width: 1206,
+        height: 2622,
+      },
+    ],
+    screensNote: "화면의 값은 예시이며, 실제와는 다를 수 있습니다.",
+    sections: [
+      {
+        id: "features",
+        title: "주요 기능",
+        blocks: [
+          {
+            kind: "cards",
+            items: [
+              {
+                title: "홈",
+                detail: "오늘, 이번 주, 이번 달 총 매출과 카드, 현금, 간편결제, 포인트로 나눈 오늘 매출을 보여줘요",
+              },
+              {
+                title: "매출 조회",
+                detail:
+                  "당일 판매와 반품 합계, 영수증 목록과 상세, 결제 수단별 내역, 일별과 월별 합계를 볼 수 있어요",
+              },
+              {
+                title: "매출 변화",
+                detail: "시간대별, 요일별, 월별 매출을 기간 평균과 나란히 놓고 막대 차트로 비교해요",
+              },
+              {
+                title: "상품, 카드사, 할인 유형별 매출",
+                detail: "기간과 포스를 골라 다시 조회하고, 상품은 판매 순위와 도넛 차트로 보여줘요",
+              },
+              {
+                title: "정산과 승인",
+                detail: "정산 내역과 카드, 간편결제, 현금영수증 승인 내역, 주문 취소 내역을 볼 수 있어요",
+              },
+              {
+                title: "마이페이지",
+                detail: "매장 정보, 알림센터, 공지와 자주 묻는 질문, 비밀번호 변경, 약관을 볼 수 있어요",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "scope",
+        title: "이 프로젝트에서 맡은 영역",
+        blocks: [
+          {
+            kind: "bullets",
+            items: [
+              "앱 기획과 화면 디자인",
+              "레이아웃, 입력창, 칩, 모달, 날짜 선택처럼 여러 화면이 함께 쓰는 공용 위젯",
+              "fl_chart 로 만든 세로 막대 차트와 도넛 차트, 금액 비율을 보여주는 가로 막대 목록",
+              "기간과 포스를 골라 다시 조회하는 검색 필터(화면 19곳에서 사용)",
+              "홈 화면",
+              "시간대별, 요일별, 월별 매출 변화 화면",
+              "매출 탭의 도넛 차트와 상품 탭의 판매 순위로 나눈 상품 매출 화면",
+            ],
+          },
+        ],
+      },
+      {
+        id: "architecture",
+        title: "구조",
+        blocks: [
+          {
+            kind: "text",
+            paragraphs: [
+              "기능별 폴더 안에 화면, 화면 모델, 그 화면에서만 쓰는 위젯을 함께 두었어요.",
+              "화면 상태는 Riverpod 3 의 Notifier 로 관리하고, 화면을 벗어나면 상태가 정리되도록 대부분 autoDispose 로 등록했어요.",
+              "서버 요청은 서비스 클래스에서만 하고, 화면 모델은 서비스를 불러 결과만 받아요.",
+              "경로는 go_router 로 매출과 마이페이지를 파일별로 나눠 등록했어요.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "stack",
+        title: "기술 스택",
+        blocks: [
+          {
+            kind: "table",
+            columns: ["기술 스택", "적용 영역"],
+            rows: [
+              ["Flutter", "iOS 와 Android 앱 화면 전체"],
+              ["Riverpod 3", "화면 모델의 상태 관리"],
+              ["go_router 17", "경로 35개와 화면 이동"],
+              ["fl_chart", "매출 변화 막대 차트와 상품 매출 도넛 차트"],
+              ["Firebase Cloud Messaging", "푸시 알림 받기, 앱을 쓰는 중에는 flutter_local_notifications 로 알림 표시"],
+              ["flutter_secure_storage", "자동 로그인 정보와 매장 정보 저장"],
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "we-on",
     name: "WE-ON",
     platform: "iOS",
